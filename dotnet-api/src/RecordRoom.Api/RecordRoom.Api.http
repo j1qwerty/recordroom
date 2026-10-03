@@ -1,0 +1,6 @@
+@RecordRoom.Api_HostAddress = http://localhost:5236
+
+GET {{RecordRoom.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
