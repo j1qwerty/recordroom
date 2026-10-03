@@ -100,6 +100,17 @@ logged and served from memory rather than surfaced.
 **Hangfire is optional too.** In-memory storage by default so the app runs with
 no extra infrastructure. Set `Hangfire:Storage` to `SqlServer` to persist jobs.
 
+Two jobs are scheduled on startup, both UTC and both idempotent:
+
+| Job | Default cron | What it does |
+| --- | --- | --- |
+| `mark-overdue-receipts` | `*/15 * * * *` | flags open receipts past their due date |
+| `prune-old-audit` | `30 2 * * *` | drops audit and login rows older than a year |
+
+Set `Hangfire:EnableScheduling` to `false` to start the API without registering
+them — useful for a test run or a read-only replica. The cron expressions are
+configuration, so a site can change the cadence without a rebuild.
+
 ## Configuration
 
 | Key | Default | Meaning |
@@ -111,6 +122,9 @@ no extra infrastructure. Set `Hangfire:Storage` to `SqlServer` to persist jobs.
 | `Database:SeedOnStartup` | `true` | seed when the registry is empty |
 | `Redis:ConnectionString` | empty | enables the Redis cache when set |
 | `Hangfire:Storage` | `InMemory` | or `SqlServer` |
+| `Hangfire:EnableScheduling` | `true` | register the recurring jobs on startup |
+| `Hangfire:OverdueSweepCron` | `*/15 * * * *` | overdue sweep cadence, UTC |
+| `Hangfire:AuditRetentionCron` | `30 2 * * *` | audit retention cadence, UTC |
 | `Cors:AllowedOrigins` | `http://localhost:5173` | frontend origin |
 | `Swagger:Enabled` | `true` | serve `/swagger` |
 

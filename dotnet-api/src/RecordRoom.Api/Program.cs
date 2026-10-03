@@ -121,6 +121,11 @@ builder.Services.AddHangfire(config =>
         config.UseMemoryStorage();
 });
 
+// Cron expressions are configuration, not code: a site may need the overdue
+// sweep at a different cadence, and nobody should have to rebuild to change it.
+var overdueCron = builder.Configuration["Hangfire:OverdueSweepCron"] ?? "*/15 * * * *";
+var pruneCron = builder.Configuration["Hangfire:AuditRetentionCron"] ?? "30 2 * * *";
+
 // Scoped, not singleton: it stamps audit rows with the caller identity, which comes from IHttpContextAccessor.
 builder.Services.AddScoped<IAuditWriter, AuditWriter>();
 builder.Services.AddScoped<IAuthService, AuthService>();
@@ -223,6 +228,40 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<RecordRoomHub>("/hubs/recordroom");
+
+// ------------------------------------------------------------------ scheduling
+// Registered after the host is built so the recurring definitions exist before
+// the first request can enqueue work. Guarded by configuration: a test run or a
+// read-only replica should not start sweeping the registry behind the operator's
+// back.
+if (app.Configuration.GetValue("Hangfire:EnableScheduling", true))
+{
+    // IRecurringJobManager from DI, not the static RecurringJob helper: the
+    // static API reads JobStorage.Current, which is only set once the service
+    // provider has been built, so calling it here would throw at startup.
+    var recurring = app.Services.GetRequiredService<IRecurringJobManager>();
+
+    recurring.AddOrUpdate<RecordRoomJobs>(
+        "mark-overdue-receipts",
+        job => job.MarkOverdueReceiptsAsync(),
+        overdueCron,
+        new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+
+    recurring.AddOrUpdate<RecordRoomJobs>(
+        "prune-old-audit",
+        job => job.PruneOldAuditAsync(),
+        pruneCron,
+        new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
+
+    app.Logger.LogInformation(
+        "Hangfire scheduled: overdue receipts '{OverdueCron}', audit retention '{PruneCron}' (UTC).",
+        overdueCron,
+        pruneCron);
+}
+else
+{
+    app.Logger.LogInformation("Hangfire scheduling is disabled by configuration.");
+}
 
 app.MapGet("/api/health", async (AppDbContext db, ICacheService cache) =>
 {
