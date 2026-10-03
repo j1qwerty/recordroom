@@ -1,0 +1,171 @@
+@import 'tailwindcss';
+
+:root {
+  --rr-bg: #eef2f4;
+  --rr-surface: #f9fbfc;
+  --rr-surface-2: #e7ecef;
+  --rr-text: #17212b;
+  --rr-muted: #5f6d78;
+  --rr-border: #d3dce1;
+  --rr-accent: #1d6f73;
+  --rr-accent-strong: #155a5d;
+  --rr-accent-soft: #dceff0;
+  --rr-warning: #a2671d;
+  --rr-danger: #a33a3a;
+  --rr-success: #2b7550;
+  --rr-shadow: 0 18px 45px rgba(27, 42, 52, 0.08);
+}
+
+.dark {
+  --rr-bg: #11171c;
+  --rr-surface: #192126;
+  --rr-surface-2: #202b32;
+  --rr-text: #edf2f4;
+  --rr-muted: #a4b0b7;
+  --rr-border: #32404a;
+  --rr-accent: #79b6b4;
+  --rr-accent-strong: #9ccdcc;
+  --rr-accent-soft: #203a3c;
+  --rr-warning: #d5a15b;
+  --rr-danger: #e08a8a;
+  --rr-success: #74ba93;
+  --rr-shadow: 0 20px 50px rgba(0, 0, 0, 0.22);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: var(--rr-bg);
+  color: var(--rr-text);
+  font-family:
+    'Inter',
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--rr-accent) 22%, transparent);
+}
+
+.focus-ring:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--rr-accent) 48%, white);
+  outline-offset: 2px;
+}
+
+.surface {
+  background: var(--rr-surface);
+  border: 1px solid var(--rr-border);
+  box-shadow: var(--rr-shadow);
+}
+
+.surface-flat {
+  background: var(--rr-surface);
+  border: 1px solid var(--rr-border);
+}
+
+.muted {
+  color: var(--rr-muted);
+}
+
+.text-accent {
+  color: var(--rr-accent);
+}
+
+.bg-accent-soft {
+  background: var(--rr-accent-soft);
+}
+
+.border-base {
+  border-color: var(--rr-border);
+}
+
+.bg-base {
+  background: var(--rr-bg);
+}
+
+.page-grid {
+  background-image:
+    linear-gradient(
+      to right,
+      color-mix(in srgb, var(--rr-border) 40%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--rr-border) 40%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 36px 36px;
+  mask-image: linear-gradient(to bottom, black, transparent 76%);
+}
+
+.scanline {
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--rr-accent) 12%, transparent) 46%,
+    transparent 100%
+  );
+  animation: scanline 4.5s ease-in-out infinite;
+}
+
+@keyframes scanline {
+  0%,
+  100% {
+    transform: translateY(-120%);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  82% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

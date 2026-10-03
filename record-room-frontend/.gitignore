@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.vite/
+.netlify/
+coverage/
+.DS_Store
+*.local
+.env
+.env.*
+!.env.example
