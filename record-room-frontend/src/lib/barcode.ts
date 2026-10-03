@@ -147,16 +147,18 @@ export function encodeCode128(input: string): BarModule[] {
   values.push(STOP);
 
   const bars: BarModule[] = [];
-  values.forEach((value, index) => {
+  values.forEach((value) => {
     const pattern = CODE128_PATTERNS[value];
     if (!pattern) return;
     let black = true;
+    // Every pattern starts with a bar and alternates. The stop pattern is the
+    // only 7-element symbol and already carries the terminal bar, so nothing
+    // extra may be appended — two adjacent black modules is an unscannable
+    // symbol.
     for (const width of pattern) {
       bars.push({ width: Number(width), black });
       black = !black;
     }
-    // A stop pattern terminates the symbol with a final bar.
-    if (index === values.length - 1) bars.push({ width: 2, black: true });
   });
 
   return bars;

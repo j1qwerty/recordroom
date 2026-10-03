@@ -38,13 +38,13 @@ Use a modular monolith plus background worker for the eventual backend. Avoid mi
 
 Structured search and full-text search remain available. AI retrieval must filter by the user's authorization before documents are presented or summarized.
 
-## 8. Firebase usage
+## 8. Small-data storage
 
-Firebase/Firestore is suitable for small frontend-facing data such as inquiries, lightweight content records and media-link metadata. Large scans, PDFs and other binary record-room data should use approved document/object storage.
+**Superseded.** This project does not use Firebase. Inquiries and media-link metadata live in the local service adapter for the frontend phase; both move behind `dotnet-api/` endpoints when it exists. Large scans, PDFs and other binary record-room data belong in approved document/object storage on the backend, never in a browser store.
 
 ## 9. External image links
 
-The frontend allows a user to paste an external image URL. The browser validates the URL by loading a preview. Only after successful validation may the URL be written to Firestore. No service-account secret or privileged storage key belongs in the browser.
+The frontend allows a user to paste an external image URL. The browser validates the URL by loading a preview, and only `http(s)` URLs are accepted. Only after successful validation may the URL be stored. No service-account secret or privileged storage key belongs in the browser.
 
 ## 10. Motion
 

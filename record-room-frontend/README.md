@@ -1,35 +1,77 @@
 # Record Room frontend
 
-Frontend-first prototype for the Record Room Software digitization platform.
+Frontend-first build of the Record Room Software digitization platform. The
+app is complete against the scope in `docs/LEGACY-GAP-REPORT.md`: every legacy
+workflow that had a frontend gap now has a working screen, backed by a typed
+service layer instead of hardcoded mock arrays.
+
+## Stack
+
+React 19 · TypeScript · Vite 7 · Tailwind CSS v4 · Motion ·
+`@chenglou/pretext` · TanStack Query (reserved for the API) · Phosphor icons.
+
+No backend dependency. No Firebase — see `AGENTS.md`.
+
+## Architecture
+
+```
+src/
+  types/          domain types mirroring the legacy SQL schema
+  data/mock.ts    seed dataset only (2 rooms, 3 sections each, 14 files)
+  services/       the data layer — pages never import src/data
+    contracts.ts  interfaces = the future .NET 10 API surface
+    store.ts      single serialisable snapshot + localStorage + subscriptions
+    permissions.ts role → capability matrix (UX gating only)
+    impl/         one module per aggregate, all guards live here
+  hooks/          useDb / useService / useSession React bindings
+  layouts/        AppShell, Topbar, Sidebar, RouteGuards
+  admin/          administration routes with their own layout
+  pages/          operational routes
+  lib/            csv export, Code 128 encoder + payload grammar, utils
+```
+
+`src/services` is the seam. Replacing the in-memory adapter with `fetch`
+against `dotnet-api/` touches that folder and nothing else.
 
 ## What is included
 
-- React + TypeScript + Vite
-- Tailwind CSS v4
-- Motion for restrained interaction animation
-- `@chenglou/pretext` for measured masonry card distribution
-- SVG record-room visualizer
-- Search, file registry, file detail and location mapping
-- Issue, return, movement and barcode workflows
-- Digitization batch views
-- Reports and administration pages
-- Dark mode
-- Ten lightweight SVG background motifs
-- Firebase-ready inquiry and media-link storage
-- External image URL preview/validation before Firestore save
-- Netlify SPA configuration
-- Comprehensive Markdown documentation under `docs/`
+- Sign-in with four legacy entry points: web password, mobile OTP, employee
+  PIN and password recovery, each attempt written to the login history.
+- Role-aware shell: four legacy roles (Admin, Supervisor, Operator, Employee)
+  with a visible permission matrix and route guards.
+- File registry with real filtering, sorting, paging and CSV export, kept
+  honest about the ~25 lakh rows the browser does not hold.
+- File creation with the legacy guards: unique barcode, shelf must exist and be
+  active, area must be a known master area, position in range.
+- Multi-file issue desk with a borrower list, and a return desk that supports
+  partial returns with a recorded condition.
+- Movement log fed by the same writes that change the data.
+- Room → section → almirah → shelf hierarchy, with the legacy parent-removal
+  and status guards, shelf barcodes and layout revision history.
+- Employee registry and employee-linked digitization batches with per-page
+  versioning, duplicate-page handling, approve/reject and bulk staging.
+- Maps and file-copy uploads with version supersession.
+- Bulk CSV ingest validated against the registry before commit.
+- Barcode centre with a real Code 128 encoder, QR sticker payloads, a print
+  queue and a scan-validation page.
+- Reports that build real rows from the service collections and export CSV,
+  recording the export on the audit trail.
+- Audit log with actor, role, IP and before/after state, plus login history.
+- Room explorer, SVG room map, shelf drill-down, dark mode, reduced-motion
+  path, route-level code splitting.
 
-## Important scope boundary
+## Scope boundary
 
-This is the frontend-first phase. Mock data stands in for the eventual .NET 10 API. SQL Server, OCR, object storage, authentication, backend authorization and AI search are documented in `docs/` but are not shipped as backend services here.
+SQL Server, SQLite, object storage, OCR, real authentication, server-side
+authorization and AI search are documented in `docs/` but not shipped here.
+The permission matrix in `src/services/permissions.ts` hides controls; it is
+not authorization. `docs/SECURITY.md` requires the backend to re-check every
+capability.
 
 ## Prerequisites
 
 - Node.js 22+
-- pnpm 10+
-
-To enable pnpm through Corepack after the source is complete:
+- pnpm 10.15.0 (pinned in `package.json`)
 
 ```bash
 corepack enable
@@ -37,46 +79,13 @@ corepack prepare pnpm@10.15.0 --activate
 pnpm --version
 ```
 
-The project pins its package manager metadata to pnpm 10.15.0.
-
-## Install
+## Commands
 
 ```bash
 pnpm install
-```
-
-## Development
-
-```bash
-pnpm dev
-```
-
-## Formatting
-
-Format the complete source/document set:
-
-```bash
-pnpm format
-```
-
-Format one file or path:
-
-```bash
-pnpm format src/pages/SearchPage.tsx
-pnpm format src/components
-```
-
-Check formatting without changing files:
-
-```bash
+pnpm dev        # http://localhost:5173, strictPort
+pnpm format     # src, scripts, public and root configs
 pnpm format:check
-```
-
-The formatter uses Prettier and respects `.gitignore`.
-
-## Other useful commands
-
-```bash
 pnpm lint
 pnpm typecheck
 pnpm test
@@ -85,77 +94,46 @@ pnpm preview
 pnpm clean
 ```
 
-## Firebase setup
+Run the verify chain in CI order: `format:check → lint → typecheck → test →
+build`. To format one path: `pnpm format src/pages/IssuePage.tsx`.
 
-Copy `.env.example` to `.env.local` and add the Firebase web app values.
+## Tests
 
-```bash
-VITE_FIREBASE_API_KEY=
-VITE_FIREBASE_AUTH_DOMAIN=
-VITE_FIREBASE_PROJECT_ID=
-VITE_FIREBASE_STORAGE_BUCKET=
-VITE_FIREBASE_MESSAGING_SENDER_ID=
-VITE_FIREBASE_APP_ID=
-VITE_FIREBASE_MEASUREMENT_ID=
-```
+`pnpm test` runs Vitest in a Node environment and covers the Code 128 encoder
+and payload grammar, the CSV writer, and every service guard (file validation,
+multi-file issue and partial return, location hierarchy guards, digitization
+versioning, bulk classification, auth, reports).
 
-The frontend uses Firestore only for lightweight data:
+## Demo accounts
 
-- `inquiries`
-- `mediaAssets`
+All accounts use the password `demo1234` (the PIN flow uses `1234`):
 
-Do not put Firebase Admin SDK credentials or service-account JSON in the frontend project.
+| User name | Role | Can |
+|---|---|---|
+| `admin` | Admin | everything |
+| `supervisor` | Supervisor | approve digitization, edit locations and employees |
+| `operator` | Operator | run the issue, return and scanning desks |
+| `employee` | Employee | read-only |
 
-For image content, the frontend currently uses external image URLs. A user pastes a URL, the browser loads it for preview, and only after successful loading does the app allow the URL to be written to Firestore. Actual large-image/document storage should use a proper object-storage pipeline later.
+## Local data
+
+Changes persist in `localStorage` under `rr-db-v1`. Settings → *Reset to seed
+data* clears it.
 
 ## Netlify
 
-`netlify.toml` already defines:
-
-- `pnpm build` as the build command
-- `dist` as the publish directory
-- SPA fallback to `/index.html`
-- Node 22
-
-The Vite base path is `/`, which is the normal setup for a root Netlify site.
-
-Set Firebase environment variables in Netlify Site configuration rather than committing them.
-
-## Browser target
-
-Use current evergreen Chromium, Firefox or Safari for development and testing. The app avoids browser-specific APIs for core workflows and has a reduced-motion path for accessibility.
+`netlify.toml` sets `pnpm build`, publishes `dist` and falls back to
+`/index.html`. No environment variables are required.
 
 ## Design direction
 
-This is a government/professional interface, so motion is subtle and functional. The visual system uses cool greys, a muted teal accent and a dark slate mode. It deliberately avoids pure-black backgrounds, heavy glassmorphism, neon gradients and distracting motion.
+Government/professional interface: cool greys, a muted teal accent, a dark
+slate mode, restrained functional motion. No pure black, no glassmorphism, no
+neon gradients. Informed by
+[taste-skill](https://github.com/Leonxlnx/taste-skill); see
+`docs/skills/design.md`.
 
-The design direction was informed by Taste Skill:
+## Next step
 
-https://github.com/Leonxlnx/taste-skill
-
-## Project documentation
-
-Start with:
-
-1. `docs/PRD.md`
-2. `docs/PROJECT-SCOPE.md`
-3. `docs/CLARIFICATIONS.md`
-4. `docs/ARCHITECTURE.md`
-5. `docs/DATA-MODEL.md`
-6. `docs/FRONTEND-SPEC.md`
-7. `docs/IMPLEMENTATION-TODO.md`
-8. `docs/SECURITY.md`
-9. `docs/PERFORMANCE-AND-UX-REVIEW.md`
-10. `docs/QA.md`
-
-## Frontend routes
-
-The frontend includes dashboard, global search, room explorer, room map, files, file detail, file creation, issue, return, movement, barcodes, digitization batches, reports, users/roles, location designer, audit, media/content, settings and support/inquiry.
-
-## Pretext and masonry
-
-The project uses the official `@chenglou/pretext` package from https://github.com/chenglou/pretext. A local `PretextMasonry` component uses Pretext text measurement for responsive card height estimates. The previously referenced `@shipitandpray/pretext-masonry` package has been removed because it does not exist in the npm registry.
-
-## Production next step
-
-Connect the exact frontend contracts to the documented .NET 10 backend architecture, then replace mock collections with paginated API endpoints. Keep file/document authorization server-side.
+Freeze the contracts in `src/services/contracts.ts` and implement the .NET 10
+API against them, then swap the adapter.

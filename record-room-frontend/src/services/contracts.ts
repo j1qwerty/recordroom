@@ -2,7 +2,7 @@
  * Service contracts.
  *
  * These interfaces are the frontend's view of the future .NET 10 API. The
- * in-memory implementation in `./repository.ts` satisfies them today; an HTTP
+ * in-memory implementation under `./impl/` satisfies them today; an HTTP
  * adapter will satisfy the same interfaces against `dotnet-api/` without any
  * page changing.
  */
@@ -40,6 +40,12 @@ import type {
   StorageUnit,
   TimelineEvent,
 } from '../types';
+import type {
+  InquiryPayload,
+  InquiryRecord,
+  MediaLinkPayload,
+  MediaLinkRecord,
+} from './impl/inquiries';
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string; field?: string };
 
@@ -376,6 +382,21 @@ export interface UsersApi {
   roles(): Role[];
 }
 
+// ------------------------------------------------------ inquiries and media
+
+export interface InquiriesApi {
+  save(payload: InquiryPayload): Result<InquiryRecord>;
+  list(): InquiryRecord[];
+  remove(id: string): Result<true>;
+  submittedBy(): string;
+}
+
+export interface MediaApi {
+  saveLink(payload: MediaLinkPayload): Result<MediaLinkRecord>;
+  list(): MediaLinkRecord[];
+  remove(id: string): Result<true>;
+}
+
 // --------------------------------------------------------------- root facade
 
 export interface RecordRoomService {
@@ -393,6 +414,8 @@ export interface RecordRoomService {
   barcodes: BarcodeApi;
   dashboard: DashboardApi;
   users: UsersApi;
+  inquiries: InquiriesApi;
+  media: MediaApi;
   /** Drops the local snapshot and reloads the seed dataset. */
   reset(): void;
 }

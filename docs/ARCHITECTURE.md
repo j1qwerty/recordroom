@@ -23,16 +23,18 @@ with:
 - File/object storage for PDFs and scans.
 - SignalR where real-time operational updates improve the workflow.
 
-## Firebase boundary in this frontend build
+## Service-layer seam in this frontend build
 
-`src/services/firestore.ts` contains narrow methods for inquiries and media-link metadata. Firebase initializes only when the Vite environment variables exist.
+There is no backend yet, so the frontend still needs a data boundary. `src/services/contracts.ts` defines the interfaces; `src/services/impl/*` implements them over a single localStorage-backed snapshot that publishes to React on every write.
+
+This is the seam the .NET 10 API plugs into: write an HTTP adapter that satisfies the same interfaces and no page changes. Guards live in the implementation modules, not in components, so a rule cannot be bypassed by a page that forgets to check it.
 
 ## Netlify
 
 - `base: '/'` in Vite.
 - `netlify.toml` defines the build command and SPA rewrite.
 - `public/_redirects` is included as a second Netlify-compatible SPA fallback.
-- Firebase environment variables should be configured in Netlify, never committed.
+- No environment variables are required today. Add `VITE_API_BASE_URL` in Netlify (never a credential) when the API exists.
 
 ## Performance model
 

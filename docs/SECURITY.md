@@ -4,7 +4,7 @@
 
 - No service-account credentials in the frontend.
 - No private API key or database credential committed to source.
-- Firebase web config may be present as environment configuration, but Firestore rules must enforce access.
+- No third-party backend SDK is shipped in the browser bundle. Persistence is a local snapshot until `dotnet-api/` exists.
 - Treat all frontend route protection as navigation convenience, not authorization.
 - Avoid `dangerouslySetInnerHTML` for record data.
 - Validate and constrain external image URLs before persisting them.

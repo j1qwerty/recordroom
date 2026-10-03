@@ -46,7 +46,7 @@
 - Document storage.
 - Notifications.
 - Reports.
-- Firestore-backed lightweight content administration where approved.
+- API-backed lightweight content administration where approved.
 
 ## Phase 3. Digitization and intelligent search
 

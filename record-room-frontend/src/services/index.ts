@@ -22,6 +22,7 @@ import { movementsService } from './impl/movements';
 import { reportsService } from './impl/reports';
 import { uploadsService } from './impl/uploads';
 import { usersService } from './impl/users';
+import { inquiriesService, mediaService } from './impl/inquiries';
 
 export const service: RecordRoomService = {
   auth: authService,
@@ -38,6 +39,8 @@ export const service: RecordRoomService = {
   barcodes: barcodesService,
   dashboard: dashboardService,
   users: usersService,
+  inquiries: inquiriesService,
+  media: mediaService,
   reset: () => store.reset(),
 };
 

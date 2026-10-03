@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import {
   Archive,
   Barcode,
@@ -8,18 +8,30 @@ import {
   Files,
   Gauge,
   Gear,
+  IdentificationCard,
   MagnifyingGlass,
   MapTrifold,
   Package,
   Scan,
   ShieldCheck,
+  SignOut,
+  UploadSimple,
   UserCircle,
-  UsersThree,
   X,
 } from '@phosphor-icons/react';
+import type { Icon } from '@phosphor-icons/react';
 import { cn } from '../lib/utils';
+import { useSession } from '../hooks/useService';
+import { can, type Permission } from '../services/permissions';
 
-const groups = [
+interface NavItem {
+  label: string;
+  to: string;
+  icon: Icon;
+  permission?: Permission;
+}
+
+const groups: Array<{ title: string; items: NavItem[] }> = [
   {
     title: 'Overview',
     items: [
@@ -32,7 +44,7 @@ const groups = [
     items: [
       { label: 'Record rooms', to: '/rooms', icon: MapTrifold },
       { label: 'Files', to: '/files', icon: Files },
-      { label: 'Barcodes', to: '/barcodes', icon: Barcode },
+      { label: 'Barcodes', to: '/barcodes', icon: Barcode, permission: 'barcodes.print' },
     ],
   },
   {
@@ -41,22 +53,35 @@ const groups = [
       { label: 'Issue desk', to: '/issue', icon: ClipboardText },
       { label: 'Return desk', to: '/return', icon: Package },
       { label: 'Movement log', to: '/movement', icon: Scan },
+      { label: 'Scan validation', to: '/scan', icon: Barcode },
     ],
   },
   {
     title: 'Digitization',
     items: [
       { label: 'Batches', to: '/digitization', icon: Archive },
-      { label: 'Reports', to: '/reports', icon: ChartBar },
+      { label: 'Reports', to: '/reports', icon: ChartBar, permission: 'reports.view' },
     ],
   },
   {
     title: 'Administration',
     items: [
-      { label: 'Users & roles', to: '/admin/users', icon: UsersThree },
-      { label: 'Locations', to: '/admin/locations', icon: Database },
-      { label: 'Audit log', to: '/admin/audit', icon: ShieldCheck },
-      { label: 'Media & content', to: '/admin/media', icon: Files },
+      { label: 'Users & roles', to: '/admin/users', icon: UserCircle, permission: 'users.view' },
+      {
+        label: 'Employees',
+        to: '/admin/employees',
+        icon: IdentificationCard,
+        permission: 'employees.view',
+      },
+      { label: 'Locations', to: '/admin/locations', icon: Database, permission: 'locations.view' },
+      {
+        label: 'Bulk import',
+        to: '/admin/bulk-import',
+        icon: UploadSimple,
+        permission: 'files.bulkImport',
+      },
+      { label: 'Audit log', to: '/admin/audit', icon: ShieldCheck, permission: 'audit.view' },
+      { label: 'Media & content', to: '/admin/media', icon: Files, permission: 'files.view' },
       { label: 'Support & inquiry', to: '/support', icon: ClipboardText },
       { label: 'Settings', to: '/settings', icon: Gear },
     ],
@@ -65,6 +90,15 @@ const groups = [
 
 export function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose: () => void }) {
   const location = useLocation();
+  const { user, signOut } = useSession();
+
+  const visibleGroups = groups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => !item.permission || can(user?.role, item.permission)),
+    }))
+    .filter((group) => group.items.length > 0);
+
   return (
     <>
       {mobileOpen && (
@@ -100,11 +134,12 @@ export function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose:
             <X size={18} />
           </button>
         </div>
+
         <nav
           className="scrollbar-thin flex-1 overflow-y-auto px-3 py-4"
           aria-label="Primary navigation"
         >
-          {groups.map((group) => (
+          {visibleGroups.map((group) => (
             <div key={group.title} className="mb-5">
               <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.18em] muted">
                 {group.title}
@@ -117,7 +152,7 @@ export function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose:
                       : location.pathname.startsWith(item.to);
                   const Icon = item.icon;
                   return (
-                    <Link
+                    <NavLink
                       key={item.to}
                       to={item.to}
                       onClick={onClose}
@@ -130,27 +165,41 @@ export function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose:
                     >
                       <Icon size={18} weight={active ? 'fill' : 'regular'} />
                       {item.label}
-                    </Link>
+                    </NavLink>
                   );
                 })}
               </div>
             </div>
           ))}
         </nav>
+
         <div className="border-t border-base p-4">
           <div className="rounded-xl bg-[var(--rr-surface-2)] p-3">
             <div className="flex items-center gap-3">
               <div className="grid size-9 place-items-center rounded-lg bg-[var(--rr-surface)]">
                 <UserCircle size={22} className="text-accent" />
               </div>
-              <div className="min-w-0">
-                <p className="truncate text-xs font-semibold">Operator 04</p>
-                <p className="truncate text-[10px] muted">Record Room Custodian</p>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold">
+                  {user?.displayName ?? 'Signed out'}
+                </p>
+                <p className="truncate text-[10px] muted">
+                  {user ? `${user.role} · ${user.userName}` : 'No session'}
+                </p>
               </div>
+              <button
+                type="button"
+                onClick={signOut}
+                className="focus-ring rounded-lg p-1.5 muted hover:text-[var(--rr-danger)]"
+                aria-label="Sign out"
+                title="Sign out"
+              >
+                <SignOut size={16} />
+              </button>
             </div>
             <div className="mt-3 flex items-center gap-2 text-[10px] muted">
-              <span className="size-2 rounded-full bg-emerald-500" /> Session active · trusted
-              device
+              <span className="size-2 rounded-full bg-emerald-500" /> Session active ·{' '}
+              {user ? 'frontend demo' : 'locked'}
             </div>
           </div>
         </div>

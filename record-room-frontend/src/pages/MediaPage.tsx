@@ -1,112 +1,183 @@
-import { CheckCircle, Image, LinkSimple, UploadSimple, WarningCircle } from '@phosphor-icons/react';
 import { useState } from 'react';
-import { saveMediaLink } from '../services/firestore';
-import { firebaseReady } from '../lib/firebase';
+import {
+  CheckCircle,
+  Image,
+  LinkSimple,
+  Trash,
+  UploadSimple,
+  WarningCircle,
+} from '@phosphor-icons/react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
+import { Field, FormGrid, TextInput } from '../components/ui/Field';
+import { Flash } from '../components/ui/Flash';
+import { EmptyState } from '../components/ui/EmptyState';
+import { useService } from '../hooks/useService';
 
+/**
+ * Media and external image links.
+ *
+ * The browser must prove an image loads before the link may be stored: the URL
+ * is checked with `Image.onload` and only http(s) URLs are accepted, so a
+ * broken or hostile URL is rejected before it is ever persisted.
+ */
 export function MediaPage() {
+  const service = useService();
+
   const [url, setUrl] = useState(
     'https://images.unsplash.com/photo-1555488205-d5e67846c94b?auto=format&fit=crop&w=1200&q=80',
   );
   const [title, setTitle] = useState('Record room reference');
   const [alt, setAlt] = useState('Record room shelves');
   const [valid, setValid] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState('');
+  const [flash, setFlash] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
+
+  const links = service.media.list();
+
   const validateImage = () =>
     new Promise<boolean>((resolve) => {
       const image = new window.Image();
       image.onload = () => {
         setValid(true);
-        setError('');
+        setFlash(null);
         resolve(true);
       };
       image.onerror = () => {
         setValid(false);
-        setError('The URL did not return a loadable image.');
+        setFlash({ tone: 'danger', text: 'The URL did not return a loadable image.' });
         resolve(false);
       };
       image.src = url;
     });
+
   const save = async () => {
     if (!(await validateImage())) return;
-    await saveMediaLink({ title, url, alt });
-    setSaved(true);
+    const result = service.media.saveLink({ title, url, alt });
+    setFlash(
+      result.ok
+        ? {
+            tone: 'success',
+            text: `Saved "${result.value.title}". No image bytes are uploaded by this frontend.`,
+          }
+        : { tone: 'danger', text: result.error },
+    );
   };
+
   return (
     <div className="space-y-6">
       <PageHeader
         kicker="Content"
         title="Media & external image links"
-        description="Frontend-only media flow. Paste an external image URL, preview it, and only save the link to Firestore after the browser proves the image loads."
+        description="Paste an external image URL, prove the browser can load it, and only then store the link locally."
       />
+
+      {flash && <Flash tone={flash.tone} text={flash.text} onDismiss={() => setFlash(null)} />}
+
       <div className="grid gap-5 xl:grid-cols-[.8fr_1.2fr]">
-        <Card>
-          <div className="flex items-center gap-2">
-            <LinkSimple className="text-accent" size={20} />
-            <p className="text-sm font-semibold">Add image by URL</p>
-          </div>
-          <div className="mt-5 space-y-4">
-            <label className="block">
-              <span className="muted text-xs font-semibold">Title</span>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="focus-ring mt-2 h-11 w-full rounded-xl border border-base bg-[var(--rr-bg)] px-3 text-sm outline-none"
-              />
-            </label>
-            <label className="block">
-              <span className="muted text-xs font-semibold">External image URL</span>
-              <input
-                value={url}
-                onChange={(e) => {
-                  setUrl(e.target.value);
-                  setValid(false);
-                  setSaved(false);
-                }}
-                className="focus-ring mt-2 h-11 w-full rounded-xl border border-base bg-[var(--rr-bg)] px-3 text-xs outline-none"
-              />
-            </label>
-            <label className="block">
-              <span className="muted text-xs font-semibold">Alt text</span>
-              <input
-                value={alt}
-                onChange={(e) => setAlt(e.target.value)}
-                className="focus-ring mt-2 h-11 w-full rounded-xl border border-base bg-[var(--rr-bg)] px-3 text-sm outline-none"
-              />
-            </label>
-            <div className="flex gap-2">
-              <Button
-                variant="ghost"
-                onClick={() => void validateImage()}
-                icon={<CheckCircle size={16} />}
-              >
-                Validate preview
-              </Button>
-              <Button
-                disabled={!valid}
-                onClick={() => void save()}
-                icon={<UploadSimple size={16} />}
-              >
-                Save link
-              </Button>
+        <div className="space-y-5">
+          <Card>
+            <div className="flex items-center gap-2">
+              <LinkSimple className="text-accent" size={20} />
+              <p className="text-sm font-semibold">Add image by URL</p>
             </div>
-            {error && (
-              <div className="flex gap-2 rounded-xl bg-[color-mix(in_srgb,var(--rr-danger)_9%,transparent)] p-3 text-xs text-[var(--rr-danger)]">
-                <WarningCircle size={16} /> {error}
+            <div className="mt-5 space-y-4">
+              <Field label="Title" htmlFor="media-title" required>
+                <TextInput
+                  id="media-title"
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                />
+              </Field>
+              <Field
+                label="External image URL"
+                htmlFor="media-url"
+                required
+                hint="http(s) only. The URL is not trusted until the preview loads."
+              >
+                <TextInput
+                  id="media-url"
+                  value={url}
+                  onChange={(event) => {
+                    setUrl(event.target.value);
+                    setValid(false);
+                    setFlash(null);
+                  }}
+                  className="text-xs"
+                />
+              </Field>
+              <Field label="Alt text" htmlFor="media-alt" required>
+                <TextInput
+                  id="media-alt"
+                  value={alt}
+                  onChange={(event) => setAlt(event.target.value)}
+                />
+              </Field>
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  onClick={() => void validateImage()}
+                  icon={<CheckCircle size={16} />}
+                >
+                  Validate preview
+                </Button>
+                <Button
+                  disabled={!valid}
+                  onClick={() => void save()}
+                  icon={<UploadSimple size={16} />}
+                >
+                  Save link
+                </Button>
               </div>
-            )}
-            {saved && (
-              <div className="rounded-xl bg-[color-mix(in_srgb,var(--rr-success)_10%,transparent)] p-3 text-xs text-[var(--rr-success)]">
-                Saved to {firebaseReady ? 'Firestore' : 'demo mode'}. No image bytes are uploaded by
-                this frontend.
+              {!valid && (
+                <p className="muted flex items-center gap-1.5 text-[11px]">
+                  <WarningCircle size={13} /> Saving stays disabled until the preview loads.
+                </p>
+              )}
+            </div>
+          </Card>
+
+          <Card padding={false} className="overflow-hidden">
+            <div className="border-b border-base p-5">
+              <p className="text-sm font-semibold">Stored links</p>
+              <p className="muted mt-1 text-xs">Local snapshot only.</p>
+            </div>
+            {links.length === 0 ? (
+              <div className="p-6">
+                <EmptyState
+                  title="No media links"
+                  description="Validate an image and save its URL."
+                />
               </div>
+            ) : (
+              <ul className="divide-y divide-[var(--rr-border)]">
+                {links.map((link) => (
+                  <li key={link.id} className="p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold">{link.title}</p>
+                        <p className="muted mt-1 truncate font-mono text-[11px]">{link.url}</p>
+                        <p className="muted mt-1 text-[11px]">
+                          {link.alt} · {link.createdAt}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => service.media.remove(link.id)}
+                        className="focus-ring rounded-lg p-1.5 text-[var(--rr-danger)] hover:bg-[var(--rr-surface-2)]"
+                        aria-label={`Remove ${link.title}`}
+                      >
+                        <Trash size={15} />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
-          </div>
-        </Card>
+          </Card>
+        </div>
+
         <Card>
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -126,11 +197,17 @@ export function MediaPage() {
               className="max-h-[480px] min-h-56 w-full object-cover"
             />
           </div>
-          <p className="muted mt-3 text-xs leading-6">
-            When production storage is required, keep the same content model and replace the link
-            writer with a signed upload endpoint or approved object-storage adapter. Do not put
-            service account credentials in the browser.
-          </p>
+          <FormGrid columns={1}>
+            <div className="mt-4 rounded-xl bg-accent-soft p-4">
+              <p className="text-xs font-semibold">When production storage is required</p>
+              <p className="muted mt-1 text-[11px] leading-5">
+                Keep this content model and replace the local writer with a signed upload endpoint
+                on
+                <span className="font-mono">dotnet-api/</span>. Never put service-account
+                credentials in the browser.
+              </p>
+            </div>
+          </FormGrid>
         </Card>
       </div>
     </div>

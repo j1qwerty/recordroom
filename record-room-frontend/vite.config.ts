@@ -13,10 +13,14 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
+        // Each chunk is cached independently. Phosphor is a barrel of ~3000
+        // icons, so it needs to be its own long-lived chunk rather than
+        // inflating whichever page imports it first.
         manualChunks: {
           react: ['react', 'react-dom', 'react-router-dom'],
           motion: ['motion'],
-          firebase: ['firebase/app', 'firebase/firestore'],
+          icons: ['@phosphor-icons/react'],
+          pretext: ['@chenglou/pretext'],
         },
       },
     },

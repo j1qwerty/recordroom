@@ -17,7 +17,7 @@
 
 ## Ask-first rule
 
-Firebase is not used in this project — do not introduce it (no Firestore, no Firebase SDK, no `VITE_FIREBASE_*` vars). Persistence for inquiries/media waits for `dotnet-api/`.
+Firebase is not used in this project — do not introduce it (no Firestore, no Firebase SDK, no `VITE_FIREBASE_*` vars). The dependency, `src/lib/firebase.ts` and `src/services/firestore.ts` have been removed; inquiries and media links live in the local service adapter until `dotnet-api/` provides endpoints.
 If an admin panel for contact/inquiry-type data was not explicitly requested, **ask the user first** before adding one. Never silently add it.
 
 ## Frontend setup (`record-room-frontend/`)
@@ -42,8 +42,13 @@ pnpm build
 
 ## Boundaries that agents get wrong
 
-- Mock data (`src/data/mock.ts`: 2 rooms, 6 files) stands in for ~25 lakh records. Keep the `Showing 1-6 of 2,478,450`-style labels honest; real pagination/sort/filter belongs to the future API, not the browser.
-- No Firebase: existing `src/lib/firebase.ts` / `src/services/firestore.ts` are unused — do not wire, extend, or add env vars for them. Inquiry/media pages stay demo/local-only until `dotnet-api/` provides real endpoints.
+- Mock data (`src/data/mock.ts`: 3 rooms, sections, 14 files) stands in for ~25 lakh records. Keep the `Showing 1-14 of 2,478,450`-style labels honest; real pagination/sort/filter belongs to the future API, not the browser.
+- Data access goes through `src/services` (contracts + in-memory adapter). Pages must not import `src/data/mock.ts`; business rules and guards belong in `src/services/impl/`.
+- No Firebase anywhere. Do not re-add the SDK, Firestore, or `VITE_FIREBASE_*` vars.
 - Image URLs: validate in-browser (`Image.onload` preview must succeed before accept); reject unsafe protocols; handle broken/changed URLs.
-- New admin code goes under `src/admin/` with its own layout; UI hiding is not authorization.
+- New admin code goes under `src/admin/` with its own layout; UI hiding is not authorization — `src/services/permissions.ts` is UX gating only.
 - Local workflow: git commit at every significant step, conventional messages. No ZIP deliverables.
+
+## Contract seam for `dotnet-api/`
+
+`record-room-frontend/src/services/contracts.ts` is the frozen frontend contract. Implementing the backend means writing an HTTP adapter that satisfies those interfaces; pages do not change.

@@ -1,20 +1,40 @@
+import { useState, type FormEvent } from 'react';
 import { CheckCircle, PaperPlaneTilt, ShieldCheck } from '@phosphor-icons/react';
-import type { FormEvent } from 'react';
-import { useState } from 'react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { saveInquiry } from '../services/firestore';
-import { firebaseReady } from '../lib/firebase';
+import { Field, FormGrid, TextArea } from '../components/ui/Field';
+import { Flash } from '../components/ui/Flash';
+import { useService } from '../hooks/useService';
 
+/**
+ * Support and inquiry.
+ *
+ * Stored in the local snapshot, not in a browser-side database. This project
+ * does not use Firebase (`AGENTS.md`), so the inquiry list is a placeholder
+ * until `dotnet-api/` exposes a real endpoint — see `docs/PHASED-SCOPE.md`.
+ */
 export function SupportPage() {
-  const [submitted, setSubmitted] = useState(false);
+  const service = useService();
   const [form, setForm] = useState({ name: '', email: '', department: '', message: '' });
-  const submit = async (event: FormEvent) => {
+  const [flash, setFlash] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
+
+  const submit = (event: FormEvent) => {
     event.preventDefault();
-    await saveInquiry(form);
-    setSubmitted(true);
+    const result = service.inquiries.save(form);
+    if (!result.ok) {
+      setFlash({ tone: 'danger', text: result.error });
+      return;
+    }
+    setFlash({
+      tone: 'success',
+      text: `Inquiry saved locally at ${result.value.createdAt}. It will not survive a dataset reset.`,
+    });
+    setForm({ name: '', email: '', department: '', message: '' });
   };
+
+  const submitted = service.inquiries.list();
+
   return (
     <div className="relative space-y-7">
       <div className="pointer-events-none absolute -left-4 top-0 w-44 opacity-20">
@@ -23,85 +43,100 @@ export function SupportPage() {
       <PageHeader
         kicker="Support & inquiry"
         title="Send an implementation inquiry"
-        description="This frontend can store lightweight inquiries in Firestore when the Firebase environment is configured."
+        description="Small operational inquiries are captured in the browser for now. Production persistence belongs to the .NET 10 API."
       />
+
+      {flash && <Flash tone={flash.tone} text={flash.text} onDismiss={() => setFlash(null)} />}
+
       <div className="grid gap-5 xl:grid-cols-[1fr_.7fr]">
         <Card>
           <form onSubmit={submit} className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field
-                label="Name"
-                value={form.name}
-                onChange={(value) => setForm({ ...form, name: value })}
+            <FormGrid>
+              <Field label="Name" htmlFor="inq-name" required>
+                <input
+                  id="inq-name"
+                  required
+                  value={form.name}
+                  onChange={(event) => setForm({ ...form, name: event.target.value })}
+                  className="focus-ring h-11 w-full rounded-xl border border-base bg-[var(--rr-bg)] px-3 text-sm outline-none"
+                />
+              </Field>
+              <Field label="Email" htmlFor="inq-email" required>
+                <input
+                  id="inq-email"
+                  required
+                  type="email"
+                  value={form.email}
+                  onChange={(event) => setForm({ ...form, email: event.target.value })}
+                  className="focus-ring h-11 w-full rounded-xl border border-base bg-[var(--rr-bg)] px-3 text-sm outline-none"
+                />
+              </Field>
+            </FormGrid>
+            <Field label="Department" htmlFor="inq-department">
+              <input
+                id="inq-department"
+                value={form.department}
+                onChange={(event) => setForm({ ...form, department: event.target.value })}
+                className="focus-ring h-11 w-full rounded-xl border border-base bg-[var(--rr-bg)] px-3 text-sm outline-none"
               />
-              <Field
-                label="Email"
-                value={form.email}
-                onChange={(value) => setForm({ ...form, email: value })}
-                type="email"
-              />
-            </div>
+            </Field>
             <Field
-              label="Department"
-              value={form.department}
-              onChange={(value) => setForm({ ...form, department: value })}
-            />
-            <label className="block">
-              <span className="muted text-xs font-semibold">Message</span>
-              <textarea
+              label="Message"
+              htmlFor="inq-message"
+              required
+              error={flash?.tone === 'danger' ? flash.text : undefined}
+            >
+              <TextArea
+                id="inq-message"
                 required
                 value={form.message}
-                onChange={(e) => setForm({ ...form, message: e.target.value })}
-                className="focus-ring mt-2 min-h-36 w-full resize-y rounded-xl border border-base bg-[var(--rr-bg)] p-3 text-sm outline-none"
+                onChange={(event) => setForm({ ...form, message: event.target.value })}
+                className="min-h-36"
+                placeholder="What needs to change in the workflow?"
               />
-            </label>
+            </Field>
             <Button type="submit" icon={<PaperPlaneTilt size={17} />}>
               Submit inquiry
             </Button>
-            {submitted && (
-              <div className="flex gap-2 rounded-xl bg-[color-mix(in_srgb,var(--rr-success)_10%,transparent)] p-3 text-xs text-[var(--rr-success)]">
-                <CheckCircle size={16} /> Inquiry saved in{' '}
-                {firebaseReady ? 'Firestore' : 'demo mode'}.
-              </div>
-            )}
           </form>
         </Card>
-        <Card>
-          <div className="flex items-center gap-3">
-            <ShieldCheck size={21} className="text-accent" />
-            <p className="text-sm font-semibold">Data handling note</p>
-          </div>
-          <p className="muted mt-4 text-sm leading-7">
-            Only small operational inquiry data belongs in Firestore here. File scans, PDFs and
-            other large binary records should use approved document/object storage rather than
-            browser Firestore writes.
-          </p>
-        </Card>
+
+        <div className="space-y-5">
+          <Card>
+            <div className="flex items-center gap-3">
+              <ShieldCheck size={21} className="text-accent" />
+              <p className="text-sm font-semibold">Data handling note</p>
+            </div>
+            <p className="muted mt-4 text-sm leading-7">
+              Nothing here leaves the browser. No third-party SDK, no browser-side database, and no
+              credential of any kind is shipped in this bundle. File scans and PDFs belong in
+              approved object storage on the backend, never in a browser database.
+            </p>
+          </Card>
+
+          <Card>
+            <p className="text-sm font-semibold">Submitted in this session</p>
+            {submitted.length === 0 ? (
+              <p className="muted mt-3 text-xs">Nothing submitted yet.</p>
+            ) : (
+              <ul className="mt-4 space-y-3">
+                {submitted.map((item) => (
+                  <li key={item.id} className="rounded-xl bg-[var(--rr-bg)] p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold">{item.name}</p>
+                      <CheckCircle size={14} className="text-[var(--rr-success)]" />
+                    </div>
+                    <p className="muted mt-1 text-[11px]">
+                      {item.department || 'No department'} · {item.createdAt}
+                    </p>
+                    <p className="muted mt-1.5 text-[11px] leading-5">{item.message}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
       </div>
     </div>
-  );
-}
-function Field({
-  label,
-  value,
-  onChange,
-  type = 'text',
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: string;
-}) {
-  return (
-    <label className="block">
-      <span className="muted text-xs font-semibold">{label}</span>
-      <input
-        required
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="focus-ring mt-2 h-11 w-full rounded-xl border border-base bg-[var(--rr-bg)] px-3 text-sm outline-none"
-      />
-    </label>
   );
 }

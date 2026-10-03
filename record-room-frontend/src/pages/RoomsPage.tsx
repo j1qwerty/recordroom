@@ -1,13 +1,17 @@
 import { Buildings, MapPin, Plus, ArrowRight } from '@phosphor-icons/react';
 import { Link } from 'react-router-dom';
-import { rooms } from '../data/mock';
 import { PageHeader } from '../components/ui/PageHeader';
 import { LinkButton } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
+import { StatusBadge } from '../components/ui/Flash';
 import { RoomMap } from '../components/RoomMap';
+import { useDb } from '../hooks/useService';
 
 export function RoomsPage() {
+  const db = useDb();
+  const rooms = db.rooms;
+
   return (
     <div className="relative space-y-8">
       <div className="pointer-events-none absolute right-0 top-0 w-40 opacity-20">
@@ -16,7 +20,7 @@ export function RoomsPage() {
       <PageHeader
         kicker="Physical model"
         title="Record rooms"
-        description="Browse from site and building down to an almirah and shelf. Every visual object maps to a persistent storage entity."
+        description="Browse from site and building down to section, almirah and shelf. Every visual object maps to a persistent storage entity."
         actions={
           <LinkButton to="/admin/locations" icon={<Plus size={17} />}>
             Manage locations
@@ -47,7 +51,7 @@ export function RoomsPage() {
             <div className="p-4">
               <RoomMap room={room} compact />
             </div>
-            <div className="grid grid-cols-3 divide-x divide-[var(--rr-border)] border-t border-base">
+            <div className="grid grid-cols-4 divide-x divide-[var(--rr-border)] border-t border-base">
               <div className="p-4">
                 <p className="muted text-[10px] uppercase tracking-[0.12em]">Occupancy</p>
                 <p className="mt-1 font-semibold">
@@ -55,7 +59,11 @@ export function RoomsPage() {
                 </p>
               </div>
               <div className="p-4">
-                <p className="muted text-[10px] uppercase tracking-[0.12em]">Units</p>
+                <p className="muted text-[10px] uppercase tracking-[0.12em]">Sections</p>
+                <p className="mt-1 font-semibold">{room.sections.length}</p>
+              </div>
+              <div className="p-4">
+                <p className="muted text-[10px] uppercase tracking-[0.12em]">Almirahs</p>
                 <p className="mt-1 font-semibold">{room.storageUnits.length}</p>
               </div>
               <div className="p-4">
@@ -66,6 +74,11 @@ export function RoomsPage() {
                   Open <ArrowRight size={14} />
                 </Link>
               </div>
+            </div>
+            <div className="flex flex-wrap gap-2 border-t border-base p-4">
+              {room.sections.map((section) => (
+                <StatusBadge key={section.id} status={section.name} />
+              ))}
             </div>
           </Card>
         ))}

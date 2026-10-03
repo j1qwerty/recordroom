@@ -37,6 +37,7 @@ import type {
   RecordFile,
   Room,
 } from '../types';
+import type { InquiryRecord, MediaLinkRecord } from './impl/inquiries';
 
 /** Persisted layout change history for the location designer. */
 export interface LayoutRevision {
@@ -62,6 +63,8 @@ export interface DbShape {
   maps: MapUpload[];
   barcodeJobs: BarcodeJob[];
   bulkJobs: BulkImportJob[];
+  inquiries: InquiryRecord[];
+  mediaLinks: MediaLinkRecord[];
 }
 
 const STORAGE_KEY = 'rr-db-v1';
@@ -82,6 +85,8 @@ export function createSeed(): DbShape {
     maps: structuredClone(mapUploads),
     barcodeJobs: structuredClone(barcodeJobs),
     bulkJobs: structuredClone(bulkImportJobs),
+    inquiries: [],
+    mediaLinks: [],
   };
 }
 
@@ -95,7 +100,9 @@ function isDbShape(value: unknown): value is DbShape {
     Array.isArray(candidate.employees) &&
     Array.isArray(candidate.users) &&
     Array.isArray(candidate.issues) &&
-    Array.isArray(candidate.audit)
+    Array.isArray(candidate.audit) &&
+    Array.isArray(candidate.inquiries) &&
+    Array.isArray(candidate.mediaLinks)
   );
 }
 

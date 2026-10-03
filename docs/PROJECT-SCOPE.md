@@ -30,6 +30,6 @@ Record Room Software for physical record management, digitization, tracking, sea
 
 ## Frontend-first scope for this delivery
 
-This project is intentionally frontend-first. It provides a production-oriented React application with realistic mock data, full navigation, visual record-room UI, scanner-first flows, settings, admin surfaces, Firebase-ready small-data services, external image-link management, and Netlify deployment configuration.
+This project is intentionally frontend-first. It provides a production-oriented React application with realistic mock data behind a typed service layer, full navigation, visual record-room UI, scanner-first flows, settings, admin surfaces, local-only inquiry and media-link storage, external image-link management, and Netlify deployment configuration. Firebase is deliberately absent.
 
 The .NET backend, SQL Server database, OCR workers and production authentication are documented but are not included as executable services in this frontend package.

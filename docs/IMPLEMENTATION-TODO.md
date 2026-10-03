@@ -20,7 +20,7 @@ This checklist was created before implementation. Frontend scope is now marked c
 - [x] Add format-check, lint, typecheck, test, build and clean scripts.
 - [x] Add `.gitignore` and `.env.example`.
 - [x] Add Netlify SPA configuration.
-- [x] Add Firebase-ready initialization.
+- [x] Add Firebase-ready initialization. *(Superseded — Firebase removed in Stage 10 per `AGENTS.md`.)*
 - [ ] Install dependencies only after source/docs are complete.
 
 ## Stage 2. Design system and frontend shell
@@ -59,13 +59,15 @@ This checklist was created before implementation. Frontend scope is now marked c
 ## Stage 5. Administration and integrations
 
 - [x] Users and roles screen.
-- [x] Location designer screen.
-- [x] Audit log screen.
-- [x] Media/link manager.
+- [x] Employee registry screen.
+- [x] Location designer screen with the `section` level.
+- [x] Audit log screen with actor, IP and before/after state.
+- [x] Login history screen.
+- [x] Maps and file-copy uploads screen.
+- [x] Bulk CSV import screen.
+- [x] Media/link manager (local only).
 - [x] Settings screen.
-- [x] Support/inquiry screen.
-- [x] Firestore inquiry integration boundary.
-- [x] Firestore media-link integration boundary.
+- [x] Support/inquiry screen (local only).
 - [x] External image preview-before-save flow.
 
 ## Stage 6. Documentation
@@ -124,3 +126,23 @@ This checklist was created before implementation. Frontend scope is now marked c
 - [x] Re-run source-level manifest, import and JavaScript syntax checks.
 - [x] Repackage the corrected frontend.
 - [x] Run `pnpm install`, `pnpm format`, `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` in an environment with npm registry access.
+
+## Stage 10. Verify pipeline repair and legacy gap closure
+
+- [x] Repair the broken verify chain: `format:check`, `lint` and `typecheck` all
+      failed on `main` (`eslint-plugin-react-refresh` config API, a renamed
+      Phosphor icon, node globals missing from the scripts config, and a
+      formatter target that did not exist).
+- [x] Add the service layer: contracts, localStorage-backed store, role
+      permission matrix, one implementation module per aggregate.
+- [x] Close all eleven gaps in `docs/LEGACY-GAP-REPORT.md`.
+- [x] Remove Firebase: dependency, `src/lib/firebase.ts`,
+      `src/services/firestore.ts`, `.env.example` and the stale `manualChunks`
+      entry. Inquiry and media links are local-only.
+- [x] Replace the CSS-barcode placeholder with a real Code 128 set-B encoder,
+      payload grammar and scan-validation page.
+- [x] Add tests for the encoder, the CSV writer and every service guard
+      (64 tests across 4 files).
+- [x] Route-level code splitting; no bundle chunk over 500 kB.
+- [x] Update `README.md`, `record-room-frontend/README.md`,
+      `docs/FRONTEND-SPEC.md` and `AGENTS.md` to match the build.

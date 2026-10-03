@@ -1,5 +1,6 @@
-import { Bell, List, MagnifyingGlass, Moon, Sun } from '@phosphor-icons/react';
+import { List, MagnifyingGlass, Moon, SignOut, Sun } from '@phosphor-icons/react';
 import { useNavigate } from 'react-router-dom';
+import { useSession } from '../hooks/useService';
 
 export function Topbar({
   dark,
@@ -11,6 +12,8 @@ export function Topbar({
   onMenu: () => void;
 }) {
   const navigate = useNavigate();
+  const { user, signOut } = useSession();
+
   return (
     <header className="sticky top-0 z-30 flex h-20 items-center gap-3 border-b border-base bg-[color-mix(in_srgb,var(--rr-surface)_88%,transparent)] px-4 backdrop-blur-xl md:px-6">
       <button
@@ -26,13 +29,16 @@ export function Topbar({
       >
         <MagnifyingGlass size={18} className="muted" />
         <span className="muted truncate text-sm">
-          Search file no., RF ID, subject, department or OCR text…
+          Search file no., barcode, subject, department or area…
         </span>
         <kbd className="ml-auto hidden rounded border border-base px-1.5 py-0.5 text-[10px] muted md:block">
           /
         </kbd>
       </button>
       <div className="ml-auto flex items-center gap-1">
+        <span className="mr-1 hidden rounded-full bg-accent-soft px-3 py-1.5 text-[11px] font-semibold text-accent md:inline">
+          {user?.role ?? 'Signed out'}
+        </span>
         <button
           onClick={() => setDark(!dark)}
           className="focus-ring rounded-lg p-2.5 hover:bg-[var(--rr-surface-2)]"
@@ -41,11 +47,12 @@ export function Topbar({
           {dark ? <Sun size={19} /> : <Moon size={19} />}
         </button>
         <button
-          className="focus-ring relative rounded-lg p-2.5 hover:bg-[var(--rr-surface-2)]"
-          aria-label="Notifications"
+          onClick={signOut}
+          className="focus-ring rounded-lg p-2.5 hover:bg-[var(--rr-surface-2)]"
+          aria-label="Sign out"
+          title="Sign out"
         >
-          <Bell size={19} />
-          <span className="absolute right-2 top-2 size-1.5 rounded-full bg-[var(--rr-danger)]" />
+          <SignOut size={19} />
         </button>
       </div>
     </header>

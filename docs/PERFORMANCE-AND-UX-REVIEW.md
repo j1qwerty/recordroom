@@ -17,7 +17,7 @@
 ### Performance
 
 - React Query is prepared as the API-state boundary.
-- Vite manual chunks separate React, Motion and Firebase bundles.
+- Vite manual chunks separate React, Motion, Phosphor icons and Pretext bundles.
 - Decorative SVGs are tiny and static.
 - Room maps render a small number of storage objects rather than huge datasets.
 - No browser-side attempt is made to load 25 lakh file records.
@@ -26,7 +26,7 @@
 
 ### Security
 
-- Firebase initialization is conditional.
+- Routes are code-split; the dashboard and login screen stay eager, every other screen loads on demand behind a Suspense fallback that keeps the shell mounted.
 - Environment variables are documented and not committed.
 - The media flow validates external images before saving their links.
 - The UI explicitly states that backend authorization is authoritative.

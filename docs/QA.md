@@ -22,7 +22,7 @@
 - [ ] Reports open.
 - [ ] Administration routes open.
 - [ ] Media page rejects a broken image URL and accepts a loaded image.
-- [ ] Support inquiry uses demo mode without Firebase and Firestore mode when configured.
+- [ ] Support inquiry saves to the local snapshot and never leaves the browser.
 - [ ] Dark mode persists locally.
 - [ ] Back-to-top button appears after scrolling.
 

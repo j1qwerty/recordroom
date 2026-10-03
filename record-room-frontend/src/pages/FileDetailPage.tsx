@@ -1,29 +1,103 @@
+import { useState } from 'react';
 import {
   ArrowLeft,
   Barcode,
   CheckCircle,
-  DownloadSimple,
+  ClockCounterClockwise,
   FileText,
   MapPin,
   Printer,
   ShieldCheck,
   UserCircle,
 } from '@phosphor-icons/react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { files } from '../data/mock';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Badge } from '../components/ui/Badge';
 import { Card } from '../components/ui/Card';
-import { LinkButton, Button } from '../components/ui/Button';
+import { Button, LinkButton } from '../components/ui/Button';
 import { PageHeader } from '../components/ui/PageHeader';
+import { EmptyState } from '../components/ui/EmptyState';
+import { Field, SelectInput, TextInput } from '../components/ui/Field';
+import { Flash, StatusBadge } from '../components/ui/Flash';
+import { BarcodeSymbol } from '../components/BarcodeSymbol';
 import { ShelfView } from '../components/ShelfView';
-import { rooms } from '../data/mock';
+import { useDb, useService, useSession } from '../hooks/useService';
+import { buildPayload } from '../lib/barcode';
 
 export function FileDetailPage() {
   const { fileId } = useParams();
   const navigate = useNavigate();
-  const file = files.find((item) => item.id === fileId) ?? files[0];
-  const room = rooms.find((item) => item.id === file.roomId) ?? rooms[0];
-  const unit = room.storageUnits.find((item) => item.code === file.almirah) ?? room.storageUnits[0];
+  const db = useDb();
+  const service = useService();
+  const { allowed } = useSession();
+
+  const file = fileId ? service.files.get(fileId) : null;
+
+  const [shelfId, setShelfId] = useState('');
+  const [position, setPosition] = useState(1);
+  const [reason, setReason] = useState('');
+  const [flash, setFlash] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
+
+  if (!file) {
+    return (
+      <div className="space-y-6">
+        <Link to="/files" className="inline-flex items-center gap-2 text-xs font-semibold muted">
+          <ArrowLeft size={15} /> All files
+        </Link>
+        <EmptyState
+          title="File not found"
+          description="That id is not in the local registry dataset."
+          action={
+            <Link to="/files" className="focus-ring text-xs font-semibold text-accent">
+              Back to the registry
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
+
+  const room = db.rooms.find((item) => item.id === file.roomId);
+  const unit =
+    room?.storageUnits.find((item) => item.id === file.almirahId) ?? room?.storageUnits[0];
+  const section = room?.sections.find((item) => item.id === file.sectionId);
+  const movements = service.movements.list({ fileId: file.id, limit: 50 });
+  const pages = db.batches
+    .flatMap((batch) => batch.pages.map((page) => ({ ...page, batchCode: batch.code })))
+    .filter((page) => page.fileBarcode === file.fileBarcode);
+  const maps = service.uploads.maps({ fileBarcode: file.fileBarcode });
+  const openIssue = db.issues.find(
+    (issue) => issue.status !== 'Returned' && issue.lines.some((line) => line.fileId === file.id),
+  );
+
+  const shelfOptions = db.rooms.flatMap((item) =>
+    item.sections.flatMap((sec) =>
+      item.storageUnits
+        .filter((u) => u.sectionId === sec.id)
+        .flatMap((u) =>
+          u.shelves
+            .filter((shelf) => shelf.status === 'Active')
+            .map((shelf) => ({
+              id: shelf.id,
+              label: `${item.code} / ${sec.name} / ${u.code} / ${shelf.code}`,
+            })),
+        ),
+    ),
+  );
+
+  const relocate = () => {
+    const result = service.files.relocate(file.id, shelfId, position, reason);
+    if (!result.ok) {
+      setFlash({ tone: 'danger', text: result.error });
+      return;
+    }
+    setFlash({
+      tone: 'success',
+      text: `Relocated to ${result.value.location}. Identity ${result.value.fileBarcode} is unchanged.`,
+    });
+    setShelfId('');
+    setReason('');
+  };
+
   return (
     <div className="space-y-7">
       <button
@@ -32,17 +106,15 @@ export function FileDetailPage() {
       >
         <ArrowLeft size={15} /> Back
       </button>
+
       <PageHeader
         kicker="Record file"
         title={file.subject}
         description={`${file.fileNumber} · ${file.department} · ${file.year}`}
         actions={
           <>
-            <Button variant="ghost" icon={<Printer size={17} />}>
+            <Button variant="ghost" icon={<Printer size={17} />} onClick={() => window.print()}>
               Print label
-            </Button>
-            <Button variant="ghost" icon={<DownloadSimple size={17} />}>
-              Download
             </Button>
             <LinkButton to="/issue" icon={<Barcode size={17} />}>
               Issue / move
@@ -50,37 +122,41 @@ export function FileDetailPage() {
           </>
         }
       />
+
+      {flash && <Flash tone={flash.tone} text={flash.text} onDismiss={() => setFlash(null)} />}
+
       <div className="grid gap-5 xl:grid-cols-[1.1fr_.9fr]">
         <div className="space-y-5">
           <Card>
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <p className="font-mono text-sm font-semibold text-accent">{file.rfId}</p>
+                <p className="font-mono text-sm font-semibold text-accent">{file.fileBarcode}</p>
                 <p className="muted mt-2 text-xs">
                   Permanent identity · immutable for the file lifecycle
                 </p>
               </div>
-              <Badge
-                tone={
-                  file.status === 'Available'
-                    ? 'success'
-                    : file.status === 'Issued'
-                      ? 'warning'
-                      : 'info'
-                }
-              >
-                {file.status}
-              </Badge>
+              <StatusBadge status={file.status} />
             </div>
             <div className="mt-6 grid gap-5 sm:grid-cols-2">
               <Info label="File number" value={file.fileNumber} />
               <Info label="Department" value={file.department} />
+              <Info label="Type" value={file.fileType} />
               <Info label="Year" value={String(file.year)} />
               <Info label="Codal life" value={file.codalLife} />
-              <Info label="Created" value={file.createdAt} />
+              <Info label="Created" value={`${file.createdAt} by ${file.createdBy}`} />
+              <Info label="Area / pincode" value={`${file.area || '—'} / ${file.pincode || '—'}`} />
+              <Info
+                label="Property"
+                value={`${file.propertyNo || '—'} · ${file.propertyArea || '—'}`}
+              />
+              <Info label="Dealer" value={file.dealer || '—'} />
               <Info label="Last movement" value={file.lastMovement} />
             </div>
+            <div className="mt-6 rounded-xl bg-[var(--rr-bg)] p-4 text-[var(--rr-text)]">
+              <BarcodeSymbol value={buildPayload('File', file.fileBarcode).value} height={56} />
+            </div>
           </Card>
+
           <Card>
             <div className="flex items-center gap-2">
               <FileText className="text-accent" size={19} />
@@ -88,28 +164,91 @@ export function FileDetailPage() {
             </div>
             <p className="muted mt-4 text-sm leading-7">{file.description}</p>
           </Card>
+
           <Card>
             <div className="flex items-center gap-2">
               <ShieldCheck className="text-accent" size={19} />
               <p className="text-sm font-semibold">Digital document</p>
             </div>
-            <div className="mt-4 rounded-xl border border-dashed border-base p-5">
-              <p className="text-sm font-semibold">
-                No production document attached in this frontend build.
-              </p>
-              <p className="muted mt-1 text-xs leading-6">
-                The backend will link PDFs, versions, OCR text, checksums and access policy to this
-                physical file.
-              </p>
+            {pages.length === 0 ? (
+              <div className="mt-4 rounded-xl border border-dashed border-base p-5">
+                <p className="text-sm font-semibold">No scanned page attached yet.</p>
+                <p className="muted mt-1 text-xs leading-6">
+                  {maps.length} map/copy upload(s) on record. The backend will stitch page versions
+                  into a PDF, attach OCR text and checksums, and enforce access policy — the legacy
+                  <span className="font-mono"> generate_pdf</span> equivalent.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-4 space-y-2">
+                {pages.map((page) => (
+                  <div
+                    key={page.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-base p-3"
+                  >
+                    <div>
+                      <p className="font-mono text-xs font-semibold">{page.filename}</p>
+                      <p className="muted mt-0.5 text-[11px]">
+                        {page.batchCode} · page {page.pageNo} · version {page.version}
+                      </p>
+                    </div>
+                    <StatusBadge status={page.status} />
+                  </div>
+                ))}
+                <div className="rounded-xl bg-accent-soft p-3">
+                  <p className="text-xs font-semibold">
+                    {pages.length} page version(s) ready for stitching
+                  </p>
+                  <p className="muted mt-1 text-[11px] leading-5">
+                    Only approved versions are eligible. PDF assembly happens server-side where the
+                    object store lives.
+                  </p>
+                </div>
+              </div>
+            )}
+          </Card>
+
+          <Card padding={false} className="overflow-hidden">
+            <div className="flex items-center gap-2 border-b border-base p-5">
+              <ClockCounterClockwise className="text-accent" size={19} />
+              <p className="text-sm font-semibold">Location and movement history</p>
             </div>
+            {movements.length === 0 ? (
+              <p className="muted p-5 text-xs">No recorded movement for this file yet.</p>
+            ) : (
+              <ol className="divide-y divide-[var(--rr-border)]">
+                {movements.map((event) => (
+                  <li key={event.id} className="p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <Badge tone="info">{event.kind}</Badge>
+                      <span className="muted text-[11px]">
+                        {event.at} · {event.actor}
+                      </span>
+                    </div>
+                    <div className="mt-3 grid gap-3 text-xs sm:grid-cols-2">
+                      <div>
+                        <p className="muted text-[10px] uppercase tracking-wider">From</p>
+                        <p className="mt-0.5 font-semibold">{event.from}</p>
+                      </div>
+                      <div>
+                        <p className="muted text-[10px] uppercase tracking-wider">To</p>
+                        <p className="mt-0.5 font-semibold">{event.to}</p>
+                      </div>
+                    </div>
+                    <p className="muted mt-2 text-[11px]">{event.detail}</p>
+                  </li>
+                ))}
+              </ol>
+            )}
           </Card>
         </div>
+
         <div className="space-y-5">
           <Card>
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold">Exact physical location</p>
-                <p className="muted mt-1 text-xs">Current location at last verified scan</p>
+                <p className="muted mt-1 text-xs">Room → section → almirah → shelf</p>
               </div>
               <MapPin className="text-accent" size={19} />
             </div>
@@ -124,6 +263,9 @@ export function FileDetailPage() {
                   style={{ width: `${file.position}%` }}
                 />
               </div>
+              <p className="muted mt-3 font-mono text-[11px]">
+                shelf barcode {file.shelfBarcode || '—'}
+              </p>
             </div>
             <div className="mt-4 flex gap-2">
               <LinkButton
@@ -135,38 +277,106 @@ export function FileDetailPage() {
                 Open room
               </LinkButton>
               <LinkButton
-                to="/search"
+                to="/scan"
                 variant="ghost"
                 className="flex-1"
                 icon={<Barcode size={16} />}
               >
-                Locate flow
+                Validate scan
               </LinkButton>
             </div>
+            {section && (
+              <p className="muted mt-4 border-t border-base pt-4 text-xs leading-6">
+                Section <span className="font-mono font-semibold">{section.name}</span> of room{' '}
+                {room?.code}. A section may only be deactivated once its almirahs are, which is what
+                keeps every file resolvable to a shelf.
+              </p>
+            )}
           </Card>
-          <Card>
-            <ShelfView unit={unit} activeShelf={file.shelf} />
-          </Card>
+
+          {unit && (
+            <Card>
+              <ShelfView unit={unit} activeShelf={file.shelf} />
+            </Card>
+          )}
+
           <Card>
             <div className="flex items-center gap-2">
               <UserCircle className="text-accent" size={19} />
               <p className="text-sm font-semibold">Current custodian state</p>
             </div>
-            <div className="mt-4 flex items-center gap-3 rounded-xl bg-[var(--rr-bg)] p-4">
-              <CheckCircle className="text-[var(--rr-success)]" size={20} />
+            <div className="mt-4 flex items-start gap-3 rounded-xl bg-[var(--rr-bg)] p-4">
+              <CheckCircle
+                size={20}
+                className={file.holder ? 'text-[var(--rr-warning)]' : 'text-[var(--rr-success)]'}
+              />
               <div>
                 <p className="text-sm font-semibold">{file.holder ?? 'In record room'}</p>
-                <p className="muted mt-1 text-xs">
-                  Issue/return state is controlled by barcode scans.
-                </p>
+                {openIssue ? (
+                  <p className="muted mt-1 text-xs">
+                    Receipt {openIssue.receiptNumber} · due {openIssue.dueAt} · {openIssue.purpose}
+                  </p>
+                ) : (
+                  <p className="muted mt-1 text-xs">
+                    Custody changes only through the issue and return desks.
+                  </p>
+                )}
               </div>
             </div>
           </Card>
+
+          {allowed('files.edit') && (
+            <Card>
+              <p className="text-sm font-semibold">Relocate this file</p>
+              <p className="muted mt-1 text-xs leading-6">
+                Identity never changes. Only the shelf and position move, and the change is written
+                to the movement log and the audit trail together.
+              </p>
+              <div className="mt-4 space-y-4">
+                <Field label="New shelf" htmlFor="relocate-shelf" required>
+                  <SelectInput
+                    id="relocate-shelf"
+                    value={shelfId}
+                    onChange={(event) => setShelfId(event.target.value)}
+                  >
+                    <option value="">Select a shelf</option>
+                    {shelfOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </SelectInput>
+                </Field>
+                <Field label="Position on shelf (1–100)" htmlFor="relocate-position">
+                  <TextInput
+                    id="relocate-position"
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={position}
+                    onChange={(event) => setPosition(Number(event.target.value))}
+                  />
+                </Field>
+                <Field label="Reason" htmlFor="relocate-reason">
+                  <TextInput
+                    id="relocate-reason"
+                    value={reason}
+                    onChange={(event) => setReason(event.target.value)}
+                    placeholder="Shelf mapping reconciled during physical audit"
+                  />
+                </Field>
+                <Button className="w-full" onClick={relocate} disabled={!shelfId}>
+                  Relocate file
+                </Button>
+              </div>
+            </Card>
+          )}
         </div>
       </div>
     </div>
   );
 }
+
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div>
