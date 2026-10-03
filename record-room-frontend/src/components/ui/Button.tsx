@@ -3,7 +3,8 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { cn } from '../../lib/utils';
 
 type BaseProps = {
-  children: ReactNode;
+  /** Optional so icon-only controls can pass `icon` + `aria-label` alone. */
+  children?: ReactNode;
   className?: string;
   icon?: ReactNode;
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger';

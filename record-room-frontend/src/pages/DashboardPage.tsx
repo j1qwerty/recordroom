@@ -1,11 +1,12 @@
 import {
-  ArrowRight,
   Archive,
+  ArrowRight,
   CheckCircle,
   Clock,
   Files,
   MagnifyingGlass,
   MapPin,
+  WarningCircle,
 } from '@phosphor-icons/react';
 import { Link } from 'react-router-dom';
 import { PretextMasonry } from '../components/PretextMasonry';
@@ -15,10 +16,20 @@ import { StatCard } from '../components/ui/StatCard';
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { DecorativeField } from '../components/DecorativeField';
 import { RoomMap } from '../components/RoomMap';
-import { rooms, dashboardEvents, galleryItems } from '../data/mock';
+import { useDb, useService } from '../hooks/useService';
+import { galleryItems } from '../data/mock';
 import { formatNumber } from '../lib/utils';
 
 export function DashboardPage() {
+  const db = useDb();
+  const service = useService();
+
+  const stats = service.dashboard.stats();
+  const activity = service.dashboard.activity(5);
+  const rooms = db.rooms;
+  const firstRoom = rooms[0];
+  const overdue = service.issues.overdue();
+
   return (
     <div className="space-y-10">
       <section className="relative overflow-hidden rounded-3xl border border-base bg-[var(--rr-surface)] p-6 shadow-sm md:p-8 lg:p-10">
@@ -45,18 +56,22 @@ export function DashboardPage() {
               </LinkButton>
             </div>
           </div>
-          <div className="surface-flat relative overflow-hidden rounded-2xl p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold">Current record-room footprint</p>
-                <p className="muted text-xs">SITE-001 · BLD-001 · Floor 02</p>
+          {firstRoom && (
+            <div className="surface-flat relative overflow-hidden rounded-2xl p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold">Current record-room footprint</p>
+                  <p className="muted text-xs">
+                    {firstRoom.building} · {firstRoom.floor} · {rooms.length} rooms mapped
+                  </p>
+                </div>
+                <span className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-semibold text-accent">
+                  {Math.round((firstRoom.occupancy / firstRoom.capacity) * 100)}% mapped
+                </span>
               </div>
-              <span className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-semibold text-accent">
-                76% mapped
-              </span>
+              <RoomMap room={firstRoom} compact />
             </div>
-            <RoomMap room={rooms[0]} compact />
-          </div>
+          )}
         </div>
       </section>
 
@@ -64,36 +79,60 @@ export function DashboardPage() {
         <SectionHeader
           eyebrow="System pulse"
           title="Today at a glance"
-          description="These values are illustrative frontend data and are ready to connect to API responses."
+          description="Aggregated from the same collections the desks write to, so these numbers cannot drift from the tables."
         />
       </section>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Physical records"
-          value={formatNumber(2478450)}
-          note="+18,240 verified this month"
+          value={formatNumber(stats.totalRecords)}
+          note={`${db.files.length} loaded in this browser`}
           icon={<Files size={22} />}
         />
         <StatCard
-          label="Mapped files"
-          value="96.8%"
-          note="+2.4% since last reconciliation"
+          label="Mapped to a shelf"
+          value={`${stats.mappedPercent}%`}
+          note={`${stats.roomCount} rooms · sections and almirahs mapped`}
           icon={<MapPin size={22} />}
         />
         <StatCard
           label="Issued now"
-          value="148"
-          note="12 due for return today"
+          value={formatNumber(stats.issuedNow)}
+          note={`${stats.dueToday} receipt(s) due or overdue`}
           tone="warning"
           icon={<Clock size={22} />}
         />
         <StatCard
-          label="Digitization"
-          value="64.2%"
-          note="Batch throughput above target"
+          label="Digitization approved"
+          value={`${stats.digitizationPercent}%`}
+          note={`${stats.pendingApprovals} page(s) awaiting review`}
           icon={<Archive size={22} />}
         />
       </div>
+
+      {overdue.length > 0 && (
+        <div className="flex flex-col gap-4 rounded-2xl border border-[color-mix(in_srgb,var(--rr-danger)_40%,transparent)] p-5 md:flex-row md:items-center md:justify-between">
+          <div className="flex gap-3">
+            <WarningCircle size={22} className="mt-0.5 shrink-0 text-[var(--rr-danger)]" />
+            <div>
+              <p className="text-sm font-semibold">
+                {overdue.length} receipt(s) overdue · {stats.activeBorrowers} active borrower(s)
+              </p>
+              <p className="muted mt-1 text-sm leading-6">
+                {overdue
+                  .slice(0, 3)
+                  .map(
+                    (issue) => `${issue.receiptNumber} (${issue.borrowerName}, due ${issue.dueAt})`,
+                  )
+                  .join(' · ')}
+              </p>
+            </div>
+          </div>
+          <Link to="/return" className="focus-ring text-xs font-semibold text-accent">
+            Open the return desk
+          </Link>
+        </div>
+      )}
 
       <section className="grid gap-5 xl:grid-cols-[1.1fr_.9fr]">
         <Card>
@@ -119,7 +158,8 @@ export function DashboardPage() {
                       {room.code} · {room.name}
                     </p>
                     <p className="muted mt-1 text-xs">
-                      {room.building} · {room.floor} · {room.storageUnits.length} storage units
+                      {room.building} · {room.floor} · {room.sections.length} sections ·{' '}
+                      {room.storageUnits.length} almirahs
                     </p>
                   </div>
                   <p className="text-sm font-semibold">
@@ -140,14 +180,14 @@ export function DashboardPage() {
           <div className="mb-5 flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold">Operational activity</p>
-              <p className="muted mt-1 text-xs">Latest auditable events</p>
+              <p className="muted mt-1 text-xs">Latest movement events</p>
             </div>
-            <Link className="text-xs font-semibold text-accent" to="/admin/audit">
-              Open audit
+            <Link className="text-xs font-semibold text-accent" to="/movement">
+              Movement log
             </Link>
           </div>
           <div className="space-y-4">
-            {dashboardEvents.map((event) => (
+            {activity.map((event) => (
               <div key={event.id} className="flex gap-3">
                 <div className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
                   <CheckCircle size={16} />
@@ -170,7 +210,7 @@ export function DashboardPage() {
         <SectionHeader
           eyebrow="Knowledge surface"
           title="Operational patterns"
-          description="A small editorial layer for training, implementation updates and record-room insights. The same module can later be driven from Firestore."
+          description="A small editorial layer for training, implementation updates and record-room insights."
         />
       </section>
       <PretextMasonry
@@ -205,11 +245,11 @@ export function DashboardPage() {
           <div>
             <p className="text-sm font-semibold">Need help with a physical record?</p>
             <p className="muted mt-1 text-sm">
-              Open the locate flow and scan or enter a file ID to get the current physical path.
+              Scan a barcode or enter a file ID to get the current physical path.
             </p>
           </div>
-          <LinkButton to="/search" variant="secondary" icon={<MagnifyingGlass size={17} />}>
-            Locate a file
+          <LinkButton to="/scan" variant="secondary" icon={<MagnifyingGlass size={17} />}>
+            Open the scanner
           </LinkButton>
         </div>
       </div>

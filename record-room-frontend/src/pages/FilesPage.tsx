@@ -1,12 +1,78 @@
-import { DownloadSimple, FileCsv, Funnel, Plus, UploadSimple } from '@phosphor-icons/react';
+import { useState } from 'react';
+import { DownloadSimple, Funnel, MagnifyingGlass, Plus, UploadSimple } from '@phosphor-icons/react';
 import { Link } from 'react-router-dom';
-import { files } from '../data/mock';
 import { PageHeader } from '../components/ui/PageHeader';
-import { LinkButton, Button } from '../components/ui/Button';
+import { LinkButton } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { Badge } from '../components/ui/Badge';
+import { SelectInput, TextInput } from '../components/ui/Field';
+import { Pagination } from '../components/ui/Pagination';
+import { StatusBadge } from '../components/ui/Flash';
+import { EmptyState } from '../components/ui/EmptyState';
+import { Button } from '../components/ui/Button';
+import { useDb, useService, useSession } from '../hooks/useService';
+import { downloadCsv, toCsv } from '../lib/csv';
+import type { FileStatus } from '../types';
+import type { FileQuery } from '../services/contracts';
+import { formatNumber } from '../lib/utils';
+
+/** Legacy collection size, kept separate from what the browser actually holds. */
+const REGISTRY_TOTAL = 2_478_450;
+
+const STATUSES: Array<FileStatus | 'All'> = [
+  'All',
+  'Available',
+  'Issued',
+  'Under Digitization',
+  'Missing',
+  'Archived',
+];
 
 export function FilesPage() {
+  const db = useDb();
+  const service = useService();
+  const { allowed } = useSession();
+
+  const [query, setQuery] = useState<FileQuery>({
+    status: 'All',
+    department: 'All',
+    sort: 'fileNumber',
+    direction: 'asc',
+    page: 1,
+    pageSize: 10,
+  });
+
+  const result = service.files.list(query);
+  const departments = service.files.departments();
+
+  const patch = (next: Partial<FileQuery>) =>
+    setQuery((current) => ({ ...current, ...next, page: next.page ?? 1 }));
+
+  const exportCsv = () => {
+    const columns = [
+      'Barcode',
+      'Number',
+      'Subject',
+      'Department',
+      'Year',
+      'Status',
+      'Shelf',
+      'Shelf barcode',
+      'Last movement',
+    ];
+    const rows = db.files.map((file) => [
+      file.fileBarcode,
+      file.fileNumber,
+      file.subject,
+      file.department,
+      file.year,
+      file.status,
+      file.shelf,
+      file.shelfBarcode,
+      file.lastMovement,
+    ]);
+    downloadCsv(`file-registry-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(columns, rows));
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -15,94 +81,160 @@ export function FilesPage() {
         description="Searchable physical-file master data with stable RF identifiers and mutable location state."
         actions={
           <>
-            <Button variant="ghost" icon={<UploadSimple size={17} />}>
-              Bulk import
-            </Button>
-            <LinkButton to="/files/new" icon={<Plus size={17} />}>
-              Create file
-            </LinkButton>
+            {allowed('files.bulkImport') && (
+              <LinkButton to="/admin/bulk-import" variant="ghost" icon={<UploadSimple size={17} />}>
+                Bulk import
+              </LinkButton>
+            )}
+            {allowed('files.create') && (
+              <LinkButton to="/files/new" icon={<Plus size={17} />}>
+                Create file
+              </LinkButton>
+            )}
           </>
         }
       />
+
       <Card padding={false} className="overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-base p-4">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" icon={<Funnel size={16} />}>
-              Filters
-            </Button>
-            <p className="muted text-xs">6 demo rows · server pagination in production</p>
+        <div className="grid gap-3 border-b border-base p-4 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
+          <div className="relative">
+            <MagnifyingGlass
+              className="muted absolute left-3.5 top-1/2 -translate-y-1/2"
+              size={17}
+            />
+            <TextInput
+              value={query.search ?? ''}
+              onChange={(event) => patch({ search: event.target.value })}
+              placeholder="Barcode, number, subject, holder, area…"
+              className="pl-10"
+              aria-label="Search files"
+            />
           </div>
-          <Button variant="ghost" icon={<DownloadSimple size={16} />}>
-            Export
-          </Button>
+          <SelectInput
+            value={query.department ?? 'All'}
+            onChange={(event) => patch({ department: event.target.value })}
+            aria-label="Filter by department"
+          >
+            <option value="All">All departments</option>
+            {departments.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </SelectInput>
+          <SelectInput
+            value={query.status ?? 'All'}
+            onChange={(event) => patch({ status: event.target.value as FileStatus | 'All' })}
+            aria-label="Filter by status"
+          >
+            {STATUSES.map((item) => (
+              <option key={item} value={item}>
+                {item === 'All' ? 'All statuses' : item}
+              </option>
+            ))}
+          </SelectInput>
+          <div className="flex gap-2">
+            <SelectInput
+              value={query.sort ?? 'fileNumber'}
+              onChange={(event) => patch({ sort: event.target.value as FileQuery['sort'] })}
+              aria-label="Sort by"
+              className="flex-1"
+            >
+              <option value="fileNumber">File number</option>
+              <option value="subject">Subject</option>
+              <option value="year">Year</option>
+              <option value="department">Department</option>
+              <option value="lastMovement">Last movement</option>
+              <option value="shelf">Shelf</option>
+            </SelectInput>
+            <Button
+              variant="ghost"
+              onClick={() => patch({ direction: query.direction === 'asc' ? 'desc' : 'asc' })}
+              icon={<Funnel size={16} />}
+              aria-label={`Sort ${query.direction === 'asc' ? 'descending' : 'ascending'}`}
+            >
+              {query.direction === 'asc' ? 'A–Z' : 'Z–A'}
+            </Button>
+          </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[920px] text-left text-sm">
-            <thead className="bg-[var(--rr-bg)] text-xs uppercase tracking-wider muted">
-              <tr>
-                <th className="px-5 py-3">File</th>
-                <th className="px-5 py-3">Department</th>
-                <th className="px-5 py-3">Year</th>
-                <th className="px-5 py-3">Status</th>
-                <th className="px-5 py-3">Location</th>
-                <th className="px-5 py-3">Last movement</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--rr-border)]">
-              {files.map((file) => (
-                <tr key={file.id} className="hover:bg-[var(--rr-bg)]">
-                  <td className="px-5 py-4">
-                    <Link to={`/files/${file.id}`} className="font-semibold hover:text-accent">
-                      {file.fileNumber}
-                    </Link>
-                    <div className="mt-1 font-mono text-[10px] muted">{file.rfId}</div>
-                    <div className="mt-2 max-w-sm text-xs muted">{file.subject}</div>
-                  </td>
-                  <td className="px-5 py-4">{file.department}</td>
-                  <td className="px-5 py-4">{file.year}</td>
-                  <td className="px-5 py-4">
-                    <Badge
-                      tone={
-                        file.status === 'Available'
-                          ? 'success'
-                          : file.status === 'Issued'
-                            ? 'warning'
-                            : 'info'
-                      }
-                    >
-                      {file.status}
-                    </Badge>
-                  </td>
-                  <td className="px-5 py-4 text-xs">{file.location}</td>
-                  <td className="px-5 py-4 text-xs muted">{file.lastMovement}</td>
+
+        {result.items.length === 0 ? (
+          <div className="p-6">
+            <EmptyState
+              title="No files match those filters"
+              description="Widen the search or clear a filter. The full registry holds far more rows than the browser loads."
+              action={
+                <Button
+                  variant="ghost"
+                  onClick={() => patch({ search: '', department: 'All', status: 'All' })}
+                >
+                  Clear filters
+                </Button>
+              }
+            />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[920px] text-left text-sm">
+              <thead className="bg-[var(--rr-bg)] text-xs uppercase tracking-wider muted">
+                <tr>
+                  <th className="px-5 py-3">File</th>
+                  <th className="px-5 py-3">Department</th>
+                  <th className="px-5 py-3">Year</th>
+                  <th className="px-5 py-3">Status</th>
+                  <th className="px-5 py-3">Location</th>
+                  <th className="px-5 py-3">Last movement</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="flex items-center justify-between border-t border-base p-4">
-          <p className="text-xs muted">Showing 1–6 of 2,478,450</p>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" disabled>
-              Previous
-            </Button>
-            <Button variant="ghost">Next</Button>
+              </thead>
+              <tbody className="divide-y divide-[var(--rr-border)]">
+                {result.items.map((file) => (
+                  <tr key={file.id} className="hover:bg-[var(--rr-bg)]">
+                    <td className="px-5 py-4">
+                      <Link to={`/files/${file.id}`} className="font-semibold hover:text-accent">
+                        {file.fileNumber}
+                      </Link>
+                      <div className="mt-1 font-mono text-[10px] muted">{file.fileBarcode}</div>
+                      <div className="mt-2 max-w-sm text-xs muted">{file.subject}</div>
+                    </td>
+                    <td className="px-5 py-4">{file.department}</td>
+                    <td className="px-5 py-4">{file.year}</td>
+                    <td className="px-5 py-4">
+                      <StatusBadge status={file.status} />
+                    </td>
+                    <td className="px-5 py-4 text-xs">{file.location}</td>
+                    <td className="px-5 py-4 text-xs muted">{file.lastMovement}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
+        )}
+
+        <Pagination
+          page={result.page}
+          pageSize={result.pageSize}
+          total={result.total}
+          collectionTotal={REGISTRY_TOTAL}
+          onPage={(page) => patch({ page })}
+          onPageSize={(pageSize) => patch({ pageSize })}
+        />
       </Card>
-      <div className="rounded-2xl border border-base bg-accent-soft p-5">
-        <div className="flex gap-3">
-          <FileCsv size={20} className="mt-0.5 text-accent" />
+
+      <Card>
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-sm font-semibold">Bulk-first operations</p>
+            <p className="text-sm font-semibold">What this page is showing</p>
             <p className="muted mt-1 text-sm leading-6">
-              The production interface should import large batches asynchronously, validate
-              duplicates before commit and allow operators to reconcile exceptions rather than
-              editing millions of rows manually.
+              {db.files.length} registry rows are loaded in the browser, standing in for{' '}
+              {formatNumber(REGISTRY_TOTAL)} files. Filtering, sorting and paging run on the loaded
+              rows only — the real query has to happen in the API.
             </p>
           </div>
+          <Button variant="ghost" onClick={exportCsv} icon={<DownloadSimple size={17} />}>
+            Export loaded rows
+          </Button>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
