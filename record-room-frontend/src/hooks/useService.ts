@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { service, store, type RecordRoomService } from '../services';
 import { session } from '../services/impl/session';
+import { realtime, type Channel } from '../services/realtime';
 import type { DbShape } from '../services/store';
 import type { AppUser, Role } from '../types';
 import type { Permission } from '../services/permissions';
@@ -46,6 +47,7 @@ export function useQuery<T>(
   run: () => Promise<T>,
   deps: readonly unknown[],
   initial: T,
+  channels: Channel[] = [],
 ): QueryState<T> {
   const [nonce, setNonce] = useState(0);
 
@@ -58,6 +60,22 @@ export function useQuery<T>(
     data: initial,
     error: null,
   });
+
+  // Another desk writing to this area invalidates what is on screen. Joining
+  // the channel turns the API's push into the refetch a user expects without
+  // polling.
+  //
+  // Keyed on the joined names, not the array: call sites pass a literal, so the
+  // array identity changes every render and a `[channels]` dependency would
+  // resubscribe in a loop.
+  const channelKey = channels.join(',');
+
+  useEffect(() => {
+    if (channelKey.length === 0) return;
+    const list = channelKey.split(',') as Channel[];
+    void realtime.join(list);
+    return realtime.subscribe(() => setNonce((n) => n + 1));
+  }, [channelKey]);
 
   useEffect(() => {
     let live = true;

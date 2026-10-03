@@ -17,13 +17,17 @@ public class RecordRoomHub : Hub
             Context.ConnectionId,
             GroupNames.Of(channels));
 
-    public override Task OnConnectedAsync()
+    public override async Task OnConnectedAsync()
     {
         // Every connection starts on the dashboard channel so the stat cards and
         // the activity list stay live everywhere, not only on the page that
         // opened the socket.
-        Groups.AddToGroupAsync(Context.ConnectionId, RealtimeChannels.Dashboard);
-        return base.OnConnectedAsync();
+        //
+        // The group name must go through GroupNames.Of, exactly as Subscribe
+        // does. The publisher sends to the namespaced group, so joining the raw
+        // channel name here would compile, start and quietly never receive.
+        await Groups.AddToGroupAsync(Context.ConnectionId, GroupNames.Of([RealtimeChannels.Dashboard]));
+        await base.OnConnectedAsync();
     }
 }
 

@@ -62,13 +62,17 @@ export function DigitizationPage() {
     () => service.digitization.batches({ search, employeeCode, folder }),
     [search, employeeCode, folder],
     [] as DigitizationBatch[],
+    // A page uploaded or a batch reviewed elsewhere must show up here.
+    ['digitization'],
   );
   const { data: employees } = useQuery<Page<Employee>>(
     () => service.employees.list({ pageSize: 100 }),
     [],
     { items: [], total: 0, page: 1, pageSize: 100 },
   );
-  const { data: pending } = useQuery(() => service.digitization.pendingReviewCount(), [], 0);
+  const { data: pending } = useQuery(() => service.digitization.pendingReviewCount(), [], 0, [
+    'digitization',
+  ]);
 
   const employeeOptions = employees.items;
   const allPages = batches.flatMap((batch) => batch.pages);

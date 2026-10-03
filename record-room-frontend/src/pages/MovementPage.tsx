@@ -55,10 +55,12 @@ export function MovementPage() {
     () => service.movements.list({ search, kind, limit: 200 }),
     [search, kind],
     EMPTY_MOVEMENTS,
+    // Any write produces a movement event; this is the live log.
+    ['movements'],
   );
   // Overdue receipts and the unfiltered total do not depend on the filters above,
   // so they are asked for once rather than on every keystroke.
-  const { data: overdue } = useQuery(() => service.issues.overdue(), [], EMPTY_ISSUES);
+  const { data: overdue } = useQuery(() => service.issues.overdue(), [], EMPTY_ISSUES, ['issues']);
   const { data: allEvents } = useQuery(
     () => service.movements.list({ limit: 10_000 }),
     [],

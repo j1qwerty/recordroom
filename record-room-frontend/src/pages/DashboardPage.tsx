@@ -21,6 +21,7 @@ import { galleryItems } from '../data/mock';
 import { formatNumber } from '../lib/utils';
 import type { DashboardStats, IssueRecord, TimelineEvent } from '../types';
 import type { Page } from '../services/contracts';
+import type { Channel } from '../services/realtime';
 
 /**
  * Placeholders for the first paint. Every figure on this page comes from the
@@ -41,17 +42,36 @@ const EMPTY_TIMELINE: TimelineEvent[] = [];
 const EMPTY_ISSUES: IssueRecord[] = [];
 const EMPTY_FILE_PAGE: Page<never> = { items: [], total: 0, page: 1, pageSize: 1 };
 
+/**
+ * The dashboard is derived from every channel, so a write anywhere must move
+ * these cards. Declared once at module scope: the hook keys on the joined names,
+ * but a stable constant keeps the intent obvious.
+ */
+const DASHBOARD_CHANNELS: Channel[] = ['files', 'issues', 'movements', 'digitization'];
+
 export function DashboardPage() {
   const service = useService();
 
-  const { data: stats } = useQuery(() => service.dashboard.stats(), [], EMPTY_STATS);
-  const { data: activity } = useQuery(() => service.dashboard.activity(5), [], EMPTY_TIMELINE);
-  const { data: overdue } = useQuery(() => service.issues.overdue(), [], EMPTY_ISSUES);
+  const { data: stats } = useQuery(
+    () => service.dashboard.stats(),
+    [],
+    EMPTY_STATS,
+    DASHBOARD_CHANNELS,
+  );
+  const { data: activity } = useQuery(() => service.dashboard.activity(5), [], EMPTY_TIMELINE, [
+    'movements',
+  ]);
+  const { data: overdue } = useQuery(() => service.issues.overdue(), [], EMPTY_ISSUES, ['issues']);
 
   // One read feeds both the footprint panel and the utilisation list. The API
   // owns the room/section/almirah counts, so they are read from its roll-up
   // rather than from a client-side snapshot.
-  const { data: occupancy } = useQuery(() => service.locations.occupancy(), [], []);
+  const { data: occupancy } = useQuery(
+    () => service.locations.occupancy(),
+    [],
+    [],
+    ['locations', 'files'],
+  );
   const rooms = occupancy.map((entry) => ({
     ...entry.room,
     sectionCount: entry.sections.length,
@@ -100,7 +120,7 @@ export function DashboardPage() {
                 <div>
                   <p className="text-sm font-semibold">Current record-room footprint</p>
                   <p className="muted text-xs">
-                    {firstRoom.building} · {firstRoom.floor} · {rooms.length} rooms mapped
+                    {firstRoom.building} Ã‚Â· {firstRoom.floor} Ã‚Â· {rooms.length} rooms mapped
                   </p>
                 </div>
                 <span className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-semibold text-accent">
@@ -130,7 +150,7 @@ export function DashboardPage() {
         <StatCard
           label="Mapped to a shelf"
           value={`${stats.mappedPercent}%`}
-          note={`${stats.roomCount} rooms · sections and almirahs mapped`}
+          note={`${stats.roomCount} rooms Ã‚Â· sections and almirahs mapped`}
           icon={<MapPin size={22} />}
         />
         <StatCard
@@ -154,7 +174,7 @@ export function DashboardPage() {
             <WarningCircle size={22} className="mt-0.5 shrink-0 text-[var(--rr-danger)]" />
             <div>
               <p className="text-sm font-semibold">
-                {overdue.length} receipt(s) overdue · {stats.activeBorrowers} active borrower(s)
+                {overdue.length} receipt(s) overdue Ã‚Â· {stats.activeBorrowers} active borrower(s)
               </p>
               <p className="muted mt-1 text-sm leading-6">
                 {overdue
@@ -162,7 +182,7 @@ export function DashboardPage() {
                   .map(
                     (issue) => `${issue.receiptNumber} (${issue.borrowerName}, due ${issue.dueAt})`,
                   )
-                  .join(' · ')}
+                  .join(' Ã‚Â· ')}
               </p>
             </div>
           </div>
@@ -193,10 +213,10 @@ export function DashboardPage() {
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-sm font-semibold">
-                      {room.code} · {room.name}
+                      {room.code} Ã‚Â· {room.name}
                     </p>
                     <p className="muted mt-1 text-xs">
-                      {room.building} · {room.floor} · {room.sectionCount} sections ·{' '}
+                      {room.building} Ã‚Â· {room.floor} Ã‚Â· {room.sectionCount} sections Ã‚Â·{' '}
                       {room.almirahCount} almirahs
                     </p>
                   </div>

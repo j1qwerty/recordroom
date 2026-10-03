@@ -65,6 +65,8 @@ export function IssuePage() {
     () => service.issues.borrowers(),
     [],
     [] as BorrowerRow[],
+    // Issue and return on another desk change who still has files out.
+    ['issues'],
   );
 
   // A scan is two round trips (exact barcode, then the search fallback), so it

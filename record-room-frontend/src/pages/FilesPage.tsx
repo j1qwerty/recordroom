@@ -48,7 +48,13 @@ export function FilesPage() {
 
   // The API filters, sorts and pages. Re-running on every keystroke is what the
   // old synchronous filter did too, so the typing experience is unchanged.
-  const { data: result, loading } = useQuery(() => service.files.list(query), [query], EMPTY);
+  const { data: result, loading } = useQuery(
+    () => service.files.list(query),
+    [query],
+    EMPTY,
+    // Another desk registering or relocating a file changes this list.
+    ['files', 'issues'],
+  );
   const { data: departments } = useQuery(() => service.files.departments(), [], [] as string[]);
 
   // The API reports the true collection size; the local adapter cannot, so the
