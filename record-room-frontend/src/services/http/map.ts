@@ -124,27 +124,43 @@ export function toSection(dto: Record<string, unknown>, roomId: string): Section
 
 export function toRoom(dto: Record<string, unknown>): Room {
   const roomId = toId(dto.id as number);
-  const units = Array.isArray(dto.storageUnits)
-    ? (dto.storageUnits as Record<string, unknown>[]).map((unit) => toUnit(unit, roomId))
-    : [];
-  const unitById = new Map(units.map((unit) => [unit.id, unit]));
+
+  // The API returns each room's units once, in `storageUnits`, and repeats them
+  // per section. Build each unit exactly once and share the object, so the two
+  // views cannot disagree about a unit's sectionId or its shelves.
+  const unitById = new Map<string, StorageUnit>();
 
   const sections = Array.isArray(dto.sections)
-    ? (dto.sections as Record<string, unknown>[]).map((section) => {
-        const mapped = toSection(section, roomId);
-        // The API returns each room's units once, alongside its sections. Attach
-        // the matching subset so the tree can be walked from either direction.
-        const own = units.filter((unit) => unit.sectionId === mapped.id);
-        return { ...mapped, storageUnits: own } as Section & { storageUnits: StorageUnit[] };
+    ? (dto.sections as Record<string, unknown>[]).map((sectionDto) => {
+        const sectionId = toId(sectionDto.id as number);
+        const own: StorageUnit[] = [];
+
+        for (const unitDto of (sectionDto.storageUnits ?? []) as Record<string, unknown>[]) {
+          const unit = toUnit(unitDto, roomId);
+          unit.sectionId = sectionId;
+          unitById.set(unit.id, unit);
+          own.push(unit);
+        }
+
+        return {
+          id: sectionId,
+          roomId,
+          code: str(sectionDto.code),
+          name: str(sectionDto.name),
+          status: str(sectionDto.status) as Section['status'],
+          // The API does not expose section timestamps; the UI shows them only
+          // as metadata, so an empty string is honest rather than invented.
+          createdAt: '',
+          updatedAt: '',
+          storageUnits: own,
+        } as Section & { storageUnits: StorageUnit[] };
       })
     : [];
 
-  // A unit whose section is not listed would otherwise vanish from the room.
-  const listed = new Set(
-    sections.flatMap((section) => (section.storageUnits ?? []).map((u) => u.id)),
-  );
-  for (const unit of units) {
-    if (!listed.has(unit.id)) unitById.set(unit.id, unit);
+  // A unit listed on the room but attached to no section would otherwise vanish.
+  for (const unitDto of (dto.storageUnits ?? []) as Record<string, unknown>[]) {
+    const id = toId(unitDto.id as number);
+    if (!unitById.has(id)) unitById.set(id, toUnit(unitDto, roomId));
   }
 
   return {
@@ -157,7 +173,7 @@ export function toRoom(dto: Record<string, unknown>): Room {
     capacity: num(dto.capacity),
     status: str(dto.status) as Room['status'],
     sections: sections as Section[],
-    storageUnits: units,
+    storageUnits: [...unitById.values()],
   };
 }
 
