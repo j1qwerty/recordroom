@@ -11,25 +11,45 @@ public readonly record struct FieldError(string Message, string? Field = null);
 
 public readonly record struct Result<T>
 {
+    private readonly T _value;
+
     public bool IsSuccess { get; }
-    public T? Value { get; }
+
+    /// <summary>
+    /// The value, meaningful only when <see cref="IsSuccess"/> is true.
+    ///
+    /// Deliberately typed <c>T</c>, not <c>T?</c>. On an unconstrained generic
+    /// the <c>?</c> annotation is erased at runtime, so a failure would hand
+    /// back <c>default(T)</c> that no null check can distinguish from a real
+    /// value: an <c>int</c> result would read as a legitimate <c>0</c> and a
+    /// null-check would never fire. Callers must consult IsSuccess.
+    /// </summary>
+    public T Value => _value;
+
     public IReadOnlyList<FieldError> Errors { get; }
 
-    private Result(bool ok, T? value, IReadOnlyList<FieldError> errors)
+    private Result(bool ok, T value, IReadOnlyList<FieldError> errors)
     {
         IsSuccess = ok;
-        Value = value;
+        _value = value;
         Errors = errors;
     }
 
     public static Result<T> Ok(T value) => new(true, value, []);
     public static Result<T> Fail(string message, string? field = null) =>
-        new(false, default, [new FieldError(message, field)]);
-    public static Result<T> Fail(IEnumerable<FieldError> errors) => new(false, default, errors.ToArray());
+        new(false, default!, [new FieldError(message, field)]);
+    public static Result<T> Fail(IEnumerable<FieldError> errors) =>
+        new(false, default!, errors.ToArray());
 
+    /// <summary>
+    /// Unwraps a success and throws on a failure, naming every error so the
+    /// mistake is diagnosable from the message alone.
+    /// </summary>
     public T ValueOrThrow() =>
-        Value ?? throw new InvalidOperationException(
-            $"Result has no value. Errors: {string.Join("; ", Errors.Select(e => e.Message))}");
+        IsSuccess
+            ? _value
+            : throw new InvalidOperationException(
+                $"Result has no value. Errors: {string.Join("; ", Errors.Select(e => e.Message))}");
 }
 
 /// <summary>Uniform success/failure envelope so the frontend adapter has one shape to parse.</summary>

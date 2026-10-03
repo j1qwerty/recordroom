@@ -1,4 +1,4 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 using Hangfire;
 using Hangfire.MemoryStorage;
@@ -12,6 +12,7 @@ using RecordRoom.Api.Application.Services;
 using RecordRoom.Api.Infrastructure.Auth;
 using RecordRoom.Api.Infrastructure.Cache;
 using RecordRoom.Api.Infrastructure.Data;
+using RecordRoom.Api.Infrastructure.Jobs;
 using RecordRoom.Api.Infrastructure.Realtime;
 using StackExchange.Redis;
 
@@ -23,9 +24,12 @@ var connectionString = builder.Configuration.GetConnectionString("Default")
 
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
+    // No EnableRetryOnFailure on purpose: the EF Core retrying execution strategy
+    // cannot be combined with user-initiated transactions, and this API relies on
+    // explicit transactions for issue/return and location writes. Transaction
+    // correctness wins over transient-fault resilience.
     options.UseSqlServer(connectionString, sql =>
-        sql.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName)
-           .EnableRetryOnFailure(3, TimeSpan.FromSeconds(5), null));
+        sql.MigrationsAssembly(typeof(AppDbContext).Assembly.FullName));
 
     if (builder.Environment.IsDevelopment())
         options.EnableDetailedErrors().EnableSensitiveDataLogging();
@@ -121,9 +125,35 @@ builder.Services.AddHangfire(config =>
 builder.Services.AddScoped<IAuditWriter, AuditWriter>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ICurrentUserAccessor, CurrentUserAccessor>();
+builder.Services.AddScoped<ILocationsService, LocationsService>();
+builder.Services.AddScoped<IFilesService, FilesService>();
+builder.Services.AddScoped<IIssuesService, IssuesService>();
+builder.Services.AddScoped<IDigitizationService, DigitizationService>();
+builder.Services.AddScoped<IEmployeesService, EmployeesService>();
+builder.Services.AddScoped<IUsersService, UsersService>();
+builder.Services.AddScoped<IContentService, ContentService>();
+builder.Services.AddScoped<IUploadsService, UploadsService>();
+builder.Services.AddScoped<IBulkService, BulkService>();
+builder.Services.AddScoped<IBarcodeService, BarcodeService>();
+builder.Services.AddScoped<IReadService, ReadService>();
+builder.Services.AddScoped<IReportsService, ReportsService>();
+builder.Services.AddScoped<RecordRoomJobs>();
 builder.Services.AddSingleton<IRealtimePublisher, RealtimePublisher>();
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddControllers();
+// Enums must serialize as strings: the frontend contract uses readable status
+// values ("Issued", "Partially returned"), and numbers would make the client's
+// StatusBadge fall through to its neutral default.
+//
+// Both option sets are needed. The controller actions return IResult, and
+// Results.Ok(...) resolves to a minimal-API JsonHttpResult, which formats with
+// HttpJsonOptions rather than MVC's JsonOptions. Configuring only one of the two
+// leaves enums as integers on half the endpoints.
+builder.Services.AddControllers()
+    .AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(
+        new System.Text.Json.Serialization.JsonStringEnumConverter()));
+
+builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(
+    new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 

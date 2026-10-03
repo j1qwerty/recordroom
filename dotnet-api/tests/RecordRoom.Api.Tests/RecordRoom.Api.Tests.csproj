@@ -14,6 +14,16 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
   </ItemGroup>
 
+  <!--
+    Integration coverage lives in scripts/test-api.ps1, which drives the real
+    HTTP surface against a real SQL Server. This project covers only the pure
+    logic that is awkward to reach over HTTP: hashing, the barcode grammar, the
+    display-name mapping and CSV row classification.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\RecordRoom.Api\RecordRoom.Api.csproj" />
+  </ItemGroup>
+
   <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
