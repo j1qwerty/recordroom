@@ -6,9 +6,9 @@ import { Button } from '../components/ui/Button';
 import { Field, TextArea, TextInput } from '../components/ui/Field';
 import { Flash } from '../components/ui/Flash';
 import { EmptyState } from '../components/ui/EmptyState';
-import { useService } from '../hooks/useService';
+import { useQuery, useService } from '../hooks/useService';
 import { downloadCsv, slugify, toCsv } from '../lib/csv';
-import type { BulkImportRow } from '../types';
+import type { BulkImportJob, BulkImportRow } from '../types';
 
 const RESULT_TONE: Record<BulkImportRow['result'], 'success' | 'danger' | 'warning' | 'neutral'> = {
   Accepted: 'success',
@@ -40,11 +40,19 @@ export function BulkImportPage() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [flash, setFlash] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
-  const jobs = service.bulk.jobs();
-  const job = jobId ? service.bulk.job(jobId) : null;
+  const { data: jobs, reload: reloadJobs } = useQuery(
+    () => service.bulk.jobs(),
+    [],
+    [] as BulkImportJob[],
+  );
+  const { data: job, reload: reloadJob } = useQuery(
+    () => (jobId ? service.bulk.job(jobId) : Promise.resolve(null)),
+    [jobId],
+    null as BulkImportJob | null,
+  );
 
-  const validate = () => {
-    const result = service.bulk.validateCsv(csv, folder);
+  const validate = async () => {
+    const result = await service.bulk.validateCsv(csv, folder);
     if (!result.ok) {
       setFlash({ tone: 'danger', text: result.error });
       return;
@@ -54,11 +62,13 @@ export function BulkImportPage() {
       tone: result.value.accepted > 0 ? 'success' : 'danger',
       text: `${result.value.rows.length} row(s) validated: ${result.value.accepted} accepted, ${result.value.rejected} rejected.`,
     });
+    // Validating stages a job, so it belongs at the top of the import history.
+    reloadJobs();
   };
 
-  const commit = () => {
+  const commit = async () => {
     if (!job) return;
-    const result = service.bulk.commit(job.id);
+    const result = await service.bulk.commit(job.id);
     if (!result.ok) {
       setFlash({ tone: 'danger', text: result.error });
       return;
@@ -67,6 +77,10 @@ export function BulkImportPage() {
       tone: 'success',
       text: `Committed ${result.value.accepted} registry row(s) from ${result.value.filename}.`,
     });
+    // Committing flips the job status and writes registry rows, so both the
+    // open job and the history have to come back from the API.
+    reloadJob();
+    reloadJobs();
   };
 
   const exportRows = (rows: BulkImportRow[], name: string) => {

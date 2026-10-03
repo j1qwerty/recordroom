@@ -1,9 +1,13 @@
-/**
+﻿/**
  * React bindings for the service layer.
  *
- * `useDb` re-renders whenever the store publishes a new snapshot, which is what
- * keeps the issue desk, movement log, audit trail and dashboard consistent with
- * each other without a single page fetching anything itself.
+ * `useQuery` is how pages read data. The service contract is async because the
+ * API owns filtering, sorting and paging, so a page cannot derive its rows from
+ * a synchronous snapshot any more; it asks and renders what comes back.
+ *
+ * `useDb` remains for the in-memory adapter's cross-references and counters. It
+ * is empty under the HTTP adapter, so a page that needs real numbers must read
+ * them from a service instead.
  */
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
@@ -13,6 +17,82 @@ import type { DbShape } from '../services/store';
 import type { AppUser, Role } from '../types';
 import type { Permission } from '../services/permissions';
 import { can } from '../services/permissions';
+
+export interface QueryState<T> {
+  data: T;
+  loading: boolean;
+  error: string | null;
+  reload: () => void;
+}
+
+/**
+ * Runs an async service call and tracks its state.
+ *
+ * `deps` behaves like a `useEffect` dependency list: change one and the call
+ * re-runs. `initial` is what renders before the first response arrives, so a
+ * page never has to special-case `undefined`.
+ *
+ * Loading is derived from a request key rather than stored in state. Storing it
+ * would mean calling `setLoading(true)` synchronously inside the effect body,
+ * which cascades an extra render on every query; deriving it means the effect
+ * only ever writes state from an async callback.
+ *
+ * Two guards matter here. A request whose deps changed before it resolved is
+ * discarded, because a slow response for an old filter would otherwise overwrite
+ * the rows the user is now looking at. And `reload` exists for refetching after
+ * a write.
+ */
+export function useQuery<T>(
+  run: () => Promise<T>,
+  deps: readonly unknown[],
+  initial: T,
+): QueryState<T> {
+  const [nonce, setNonce] = useState(0);
+
+  // Identifies this request. Changing deps or bumping nonce starts a new one,
+  // which is what makes `loading` true without any setState in the effect body.
+  const key = useMemo(() => `${JSON.stringify(deps)}#${nonce}`, [deps, nonce]);
+
+  const [state, setState] = useState<{ key: string; data: T; error: string | null }>({
+    key,
+    data: initial,
+    error: null,
+  });
+
+  useEffect(() => {
+    let live = true;
+
+    run().then(
+      (value) => {
+        if (live) setState({ key, data: value, error: null });
+      },
+      (cause: unknown) => {
+        if (!live) return;
+        const error = cause instanceof Error ? cause.message : String(cause);
+        // Keep the previous rows on failure: an empty table plus an error reads
+        // as "there is nothing here", which is a different claim.
+        setState((current) => ({ ...current, key, error }));
+      },
+    );
+
+    return () => {
+      live = false;
+    };
+    // `run` is intentionally omitted: it closes over `deps`, which is what
+    // decides when to refetch. Listing it would refetch on every render, since
+    // call sites pass an inline arrow.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  const reload = useCallback(() => setNonce((n) => n + 1), []);
+
+  return {
+    data: state.data,
+    loading: state.key !== key,
+    error: state.error,
+    reload,
+  };
+}
 
 export function useDb(): DbShape {
   return useSyncExternalStore(store.subscribe, store.getState, store.getState);
@@ -34,7 +114,7 @@ export function useSession() {
   }, []);
 
   const signOut = useCallback(() => {
-    service.auth.signOut();
+    void service.auth.signOut();
   }, []);
 
   const allowed = useCallback(

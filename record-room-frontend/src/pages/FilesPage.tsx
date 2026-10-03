@@ -9,13 +9,17 @@ import { Pagination } from '../components/ui/Pagination';
 import { StatusBadge } from '../components/ui/Flash';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Button } from '../components/ui/Button';
-import { useDb, useService, useSession } from '../hooks/useService';
+import { useQuery, useService, useSession } from '../hooks/useService';
 import { downloadCsv, toCsv } from '../lib/csv';
-import type { FileStatus } from '../types';
-import type { FileQuery } from '../services/contracts';
+import type { FileStatus, RecordFile } from '../types';
+import type { FileQuery, Page } from '../services/contracts';
 import { formatNumber } from '../lib/utils';
 
-/** Legacy collection size, kept separate from what the browser actually holds. */
+/**
+ * Legacy collection size. The API reports its own figure via `collectionTotal`;
+ * this is the fallback for the in-memory adapter, which has no honest number to
+ * give and would otherwise imply it holds every record.
+ */
 const REGISTRY_TOTAL = 2_478_450;
 
 const STATUSES: Array<FileStatus | 'All'> = [
@@ -27,8 +31,9 @@ const STATUSES: Array<FileStatus | 'All'> = [
   'Archived',
 ];
 
+const EMPTY: Page<RecordFile> = { items: [], total: 0, page: 1, pageSize: 10 };
+
 export function FilesPage() {
-  const db = useDb();
   const service = useService();
   const { allowed } = useSession();
 
@@ -41,8 +46,14 @@ export function FilesPage() {
     pageSize: 10,
   });
 
-  const result = service.files.list(query);
-  const departments = service.files.departments();
+  // The API filters, sorts and pages. Re-running on every keystroke is what the
+  // old synchronous filter did too, so the typing experience is unchanged.
+  const { data: result, loading } = useQuery(() => service.files.list(query), [query], EMPTY);
+  const { data: departments } = useQuery(() => service.files.departments(), [], [] as string[]);
+
+  // The API reports the true collection size; the local adapter cannot, so the
+  // label falls back to the figure the registry has always claimed.
+  const collectionTotal = result.collectionTotal ?? REGISTRY_TOTAL;
 
   const patch = (next: Partial<FileQuery>) =>
     setQuery((current) => ({ ...current, ...next, page: next.page ?? 1 }));
@@ -59,7 +70,7 @@ export function FilesPage() {
       'Shelf barcode',
       'Last movement',
     ];
-    const rows = db.files.map((file) => [
+    const rows = result.items.map((file) => [
       file.fileBarcode,
       file.fileNumber,
       file.subject,
@@ -161,15 +172,21 @@ export function FilesPage() {
         {result.items.length === 0 ? (
           <div className="p-6">
             <EmptyState
-              title="No files match those filters"
-              description="Widen the search or clear a filter. The full registry holds far more rows than the browser loads."
+              title={loading ? 'Loading files' : 'No files match those filters'}
+              description={
+                loading
+                  ? 'Asking the registry for the matching rows.'
+                  : 'Widen the search or clear a filter. The full registry holds far more rows than one page can show.'
+              }
               action={
-                <Button
-                  variant="ghost"
-                  onClick={() => patch({ search: '', department: 'All', status: 'All' })}
-                >
-                  Clear filters
-                </Button>
+                loading ? undefined : (
+                  <Button
+                    variant="ghost"
+                    onClick={() => patch({ search: '', department: 'All', status: 'All' })}
+                  >
+                    Clear filters
+                  </Button>
+                )
               }
             />
           </div>
@@ -214,7 +231,7 @@ export function FilesPage() {
           page={result.page}
           pageSize={result.pageSize}
           total={result.total}
-          collectionTotal={REGISTRY_TOTAL}
+          collectionTotal={collectionTotal}
           onPage={(page) => patch({ page })}
           onPageSize={(pageSize) => patch({ pageSize })}
         />
@@ -225,9 +242,9 @@ export function FilesPage() {
           <div>
             <p className="text-sm font-semibold">What this page is showing</p>
             <p className="muted mt-1 text-sm leading-6">
-              {db.files.length} registry rows are loaded in the browser, standing in for{' '}
-              {formatNumber(REGISTRY_TOTAL)} files. Filtering, sorting and paging run on the loaded
-              rows only — the real query has to happen in the API.
+              Showing {formatNumber(result.total)} matching row{result.total === 1 ? '' : 's'} out
+              of {formatNumber(collectionTotal)} files. Filtering, sorting and paging all happen in
+              the API, so this window is exactly what the registry returned.
             </p>
           </div>
           <Button variant="ghost" onClick={exportCsv} icon={<DownloadSimple size={17} />}>

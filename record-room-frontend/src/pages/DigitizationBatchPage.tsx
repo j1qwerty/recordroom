@@ -8,8 +8,8 @@ import { Badge } from '../components/ui/Badge';
 import { Field, TextInput } from '../components/ui/Field';
 import { Flash, StatusBadge } from '../components/ui/Flash';
 import { EmptyState } from '../components/ui/EmptyState';
-import { useService, useSession } from '../hooks/useService';
-import { FOLDER_LABELS } from '../types';
+import { useQuery, useService, useSession } from '../hooks/useService';
+import { FOLDER_LABELS, type DigitizationBatch } from '../types';
 
 /**
  * Batch detail with page-level review.
@@ -23,7 +23,17 @@ export function DigitizationBatchPage() {
   const service = useService();
   const { allowed } = useSession();
 
-  const batch = batchId ? service.digitization.batch(batchId) : null;
+  // The API resolves the batch, so `data` is null until it answers (and stays
+  // null for a genuinely unknown id). Every mutation below reloads it.
+  const {
+    data: batch,
+    loading,
+    reload,
+  } = useQuery(
+    () => (batchId ? service.digitization.batch(batchId) : Promise.resolve(null)),
+    [batchId],
+    null as DigitizationBatch | null,
+  );
 
   const [fileBarcode, setFileBarcode] = useState('');
   const [pageNo, setPageNo] = useState(1);
@@ -42,12 +52,18 @@ export function DigitizationBatchPage() {
           <ArrowLeft size={15} /> All batches
         </Link>
         <EmptyState
-          title="Batch not found"
-          description="That batch id is not in the local dataset. Return to the batch list."
+          title={loading ? 'Loading batch' : 'Batch not found'}
+          description={
+            loading
+              ? 'Asking the digitization register for this batch.'
+              : 'That batch id is not in the local dataset. Return to the batch list.'
+          }
           action={
-            <Link to="/digitization" className="focus-ring text-xs font-semibold text-accent">
-              Back to batches
-            </Link>
+            loading ? undefined : (
+              <Link to="/digitization" className="focus-ring text-xs font-semibold text-accent">
+                Back to batches
+              </Link>
+            )
           }
         />
       </div>
@@ -57,8 +73,8 @@ export function DigitizationBatchPage() {
   const readOnly = batch.status === 'Approved';
   const folderPath = service.digitization.folderPath(batch);
 
-  const upload = () => {
-    const result = service.digitization.uploadPage(batch.id, {
+  const upload = async () => {
+    const result = await service.digitization.uploadPage(batch.id, {
       fileBarcode: fileBarcode.trim(),
       pageNo,
       filename: filename.trim(),
@@ -75,26 +91,30 @@ export function DigitizationBatchPage() {
     setFileBarcode('');
     setFilename('');
     setPageNo(1);
+    // The page list, the version counts and the batch status all move.
+    reload();
   };
 
-  const review = (pageId: string, decision: 'Approved' | 'Rejected', note: string) => {
-    const result = service.digitization.reviewPage(pageId, decision, note);
+  const review = async (pageId: string, decision: 'Approved' | 'Rejected', note: string) => {
+    const result = await service.digitization.reviewPage(pageId, decision, note);
     setFlash(
       result.ok
         ? { tone: 'success', text: `Page ${decision.toLowerCase()}.` }
         : { tone: 'danger', text: result.error },
     );
     setRejectNote('');
+    reload();
   };
 
-  const reviewBatch = (decision: 'Approved' | 'Rejected') => {
-    const result = service.digitization.reviewBatch(batch.id, decision, rejectNote);
+  const reviewBatch = async (decision: 'Approved' | 'Rejected') => {
+    const result = await service.digitization.reviewBatch(batch.id, decision, rejectNote);
     setFlash(
       result.ok
         ? { tone: 'success', text: `Batch now ${result.value.status}.` }
         : { tone: 'danger', text: result.error },
     );
     setRejectNote('');
+    reload();
   };
 
   return (

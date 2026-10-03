@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChartBar, DownloadSimple, FileCsv, ShieldCheck } from '@phosphor-icons/react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
@@ -7,9 +7,10 @@ import { Badge } from '../components/ui/Badge';
 import { Flash } from '../components/ui/Flash';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Pagination } from '../components/ui/Pagination';
-import { useService, useSession } from '../hooks/useService';
+import { useQuery, useService, useSession } from '../hooks/useService';
 import { exportReport } from '../services';
-import type { ReportKey } from '../types';
+import type { ReportDefinition, ReportKey } from '../types';
+import type { ReportResult } from '../services/contracts';
 
 const PAGE_SIZE = 12;
 
@@ -24,26 +25,68 @@ export function ReportsPage() {
   const service = useService();
   const { allowed } = useSession();
 
-  const definitions = service.reports.definitions;
-  const [active, setActive] = useState<ReportKey>(definitions[0].key);
+  // Definitions are a plain read, so they come through a query. The first paint
+  // has none yet, hence the empty seed.
+  const { data: definitions } = useQuery(
+    () => service.reports.definitions(),
+    [],
+    [] as ReportDefinition[],
+  );
+
+  const [active, setActive] = useState<ReportKey | null>(null);
+  const [result, setResult] = useState<ReportResult | null>(null);
+  const [counts, setCounts] = useState<Record<string, number>>({});
   const [page, setPage] = useState(1);
   const [flash, setFlash] = useState<{ tone: 'success' | 'info'; text: string } | null>(null);
 
-  const result = service.reports.build(active);
-  const rows = result.rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  const select = (key: ReportKey) => {
+  /**
+   * Builds every definition in one batch.
+   *
+   * `build` is a user action, not a render-time read: it compiles rows from the
+   * whole registry. The card badges want a row count per definition, so building
+   * all of them together costs the same round trips as building one and avoids a
+   * second pass when the selection changes.
+   */
+  const loadReports = async (key: ReportKey) => {
+    const built = await buildAll(service, definitions);
     setActive(key);
     setPage(1);
+    setCounts(Object.fromEntries(built.map((item) => [item.definition.key, item.rows.length])));
+    setResult(built.find((item) => item.definition.key === key) ?? null);
   };
 
-  const runExport = () => {
-    const built = exportReport(active);
+  // Nothing is built until the definitions arrive, so the first definition is
+  // preselected once. The build is a deliberate async step rather than a
+  // `useQuery` dep: it compiles rows from the whole registry, and re-running it
+  // because a dep changed would be a full rebuild for no user action.
+  const primed = useRef(false);
+  useEffect(() => {
+    if (definitions.length === 0 || primed.current) return;
+    primed.current = true;
+    let live = true;
+    buildAll(service, definitions).then((built) => {
+      if (!live) return;
+      const first = built[0];
+      if (!first) return;
+      setActive(first.definition.key);
+      setCounts(Object.fromEntries(built.map((item) => [item.definition.key, item.rows.length])));
+      setResult(first);
+    });
+    return () => {
+      live = false;
+    };
+  }, [service, definitions]);
+
+  const runExport = async () => {
+    if (!active) return;
+    const built = await exportReport(active);
     setFlash({
       tone: 'success',
       text: `${built.definition.title} exported with ${built.rows.length} row(s). The export is on the audit trail.`,
     });
   };
+
+  const rows = result ? result.rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : [];
 
   return (
     <div className="space-y-7">
@@ -64,20 +107,23 @@ export function ReportsPage() {
 
       <div className="grid gap-4 md:grid-cols-4">
         <Kpi label="Reports available" value={String(definitions.length)} />
-        <Kpi label="Rows in view" value={String(result.rows.length)} />
+        <Kpi label="Rows in view" value={String(result?.rows.length ?? 0)} />
         <Kpi label="Format" value="CSV" />
-        <Kpi label="Legacy source" value={result.definition.legacySource.split('·')[0].trim()} />
+        <Kpi
+          label="Legacy source"
+          value={result ? result.definition.legacySource.split('·')[0].trim() : '—'}
+        />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {definitions.map((definition) => {
           const isActive = definition.key === active;
-          const count = service.reports.build(definition.key).rows.length;
+          const count = counts[definition.key] ?? 0;
           return (
             <button
               key={definition.key}
               type="button"
-              onClick={() => select(definition.key)}
+              onClick={() => void loadReports(definition.key)}
               className={`focus-ring rounded-2xl border p-5 text-left transition ${
                 isActive
                   ? 'border-[var(--rr-accent)] bg-accent-soft'
@@ -100,9 +146,11 @@ export function ReportsPage() {
       <Card padding={false} className="overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-base p-5">
           <div>
-            <p className="text-sm font-semibold">{result.definition.title}</p>
+            <p className="text-sm font-semibold">{result?.definition.title ?? 'Building report'}</p>
             <p className="muted mt-1 text-xs">
-              Generated {result.generatedAt} · {result.definition.legacySource}
+              {result
+                ? `Generated ${result.generatedAt} · ${result.definition.legacySource}`
+                : 'Compiling rows from the registry collections.'}
             </p>
           </div>
           <Badge tone="neutral">
@@ -110,7 +158,14 @@ export function ReportsPage() {
           </Badge>
         </div>
 
-        {result.rows.length === 0 ? (
+        {!result ? (
+          <div className="p-6">
+            <EmptyState
+              title="Building the report"
+              description="Rows are compiled server-side from the same collections the desks write to."
+            />
+          </div>
+        ) : result.rows.length === 0 ? (
           <div className="p-6">
             <EmptyState
               title="No rows for this report"
@@ -175,6 +230,20 @@ export function ReportsPage() {
       </Card>
     </div>
   );
+}
+
+/**
+ * Builds every definition in one batch.
+ *
+ * The card badges want a row count per definition, so building them together
+ * costs no more round trips than building the one on screen, and the selection
+ * is picked straight out of the same batch.
+ */
+async function buildAll(
+  service: ReturnType<typeof useService>,
+  definitions: ReportDefinition[],
+): Promise<ReportResult[]> {
+  return Promise.all(definitions.map((item) => service.reports.build(item.key)));
 }
 
 function Kpi({ label, value }: { label: string; value: string }) {

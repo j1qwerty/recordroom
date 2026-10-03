@@ -16,19 +16,57 @@ import { StatCard } from '../components/ui/StatCard';
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { DecorativeField } from '../components/DecorativeField';
 import { RoomMap } from '../components/RoomMap';
-import { useDb, useService } from '../hooks/useService';
+import { useQuery, useService } from '../hooks/useService';
 import { galleryItems } from '../data/mock';
 import { formatNumber } from '../lib/utils';
+import type { DashboardStats, IssueRecord, TimelineEvent } from '../types';
+import type { Page } from '../services/contracts';
+
+/**
+ * Placeholders for the first paint. Every figure on this page comes from the
+ * API, so nothing here may claim a number the service has not reported yet.
+ */
+const EMPTY_STATS: DashboardStats = {
+  totalRecords: 0,
+  mappedPercent: 0,
+  issuedNow: 0,
+  dueToday: 0,
+  digitizationPercent: 0,
+  overdueCount: 0,
+  roomCount: 0,
+  activeBorrowers: 0,
+  pendingApprovals: 0,
+};
+const EMPTY_TIMELINE: TimelineEvent[] = [];
+const EMPTY_ISSUES: IssueRecord[] = [];
+const EMPTY_FILE_PAGE: Page<never> = { items: [], total: 0, page: 1, pageSize: 1 };
 
 export function DashboardPage() {
-  const db = useDb();
   const service = useService();
 
-  const stats = service.dashboard.stats();
-  const activity = service.dashboard.activity(5);
-  const rooms = db.rooms;
+  const { data: stats } = useQuery(() => service.dashboard.stats(), [], EMPTY_STATS);
+  const { data: activity } = useQuery(() => service.dashboard.activity(5), [], EMPTY_TIMELINE);
+  const { data: overdue } = useQuery(() => service.issues.overdue(), [], EMPTY_ISSUES);
+
+  // One read feeds both the footprint panel and the utilisation list. The API
+  // owns the room/section/almirah counts, so they are read from its roll-up
+  // rather than from a client-side snapshot.
+  const { data: occupancy } = useQuery(() => service.locations.occupancy(), [], []);
+  const rooms = occupancy.map((entry) => ({
+    ...entry.room,
+    sectionCount: entry.sections.length,
+    almirahCount: entry.sections.reduce((sum, row) => sum + row.almirahs, 0),
+  }));
   const firstRoom = rooms[0];
-  const overdue = service.issues.overdue();
+
+  // The "loaded in this browser" note used to count rows in the local snapshot.
+  // Under the HTTP adapter that snapshot is empty, so the registry's own row
+  // count is the honest replacement.
+  const { data: registry } = useQuery(
+    () => service.files.list({ pageSize: 1 }),
+    [],
+    EMPTY_FILE_PAGE,
+  );
 
   return (
     <div className="space-y-10">
@@ -86,7 +124,7 @@ export function DashboardPage() {
         <StatCard
           label="Physical records"
           value={formatNumber(stats.totalRecords)}
-          note={`${db.files.length} loaded in this browser`}
+          note={`${formatNumber(registry.collectionTotal ?? registry.total)} indexed in the registry`}
           icon={<Files size={22} />}
         />
         <StatCard
@@ -158,8 +196,8 @@ export function DashboardPage() {
                       {room.code} · {room.name}
                     </p>
                     <p className="muted mt-1 text-xs">
-                      {room.building} · {room.floor} · {room.sections.length} sections ·{' '}
-                      {room.storageUnits.length} almirahs
+                      {room.building} · {room.floor} · {room.sectionCount} sections ·{' '}
+                      {room.almirahCount} almirahs
                     </p>
                   </div>
                   <p className="text-sm font-semibold">

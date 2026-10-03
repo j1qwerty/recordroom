@@ -7,7 +7,7 @@ import { store } from '../store';
 import type { MovementEvent } from '../../types';
 
 export const movementsService: MovementApi = {
-  list(query: MovementQuery = {}) {
+  async list(query: MovementQuery = {}) {
     const search = query.search?.trim().toLowerCase() ?? '';
     const rows: MovementEvent[] = store.getState().movements.filter((event) => {
       if (query.kind && query.kind !== 'All' && event.kind !== query.kind) return false;
@@ -23,7 +23,7 @@ export const movementsService: MovementApi = {
     return rows.slice(0, query.limit ?? 300);
   },
 
-  recent(limit = 10) {
-    return movementsService.list({ limit });
+  async recent(limit = 10) {
+    return await movementsService.list({ limit });
   },
 };

@@ -20,23 +20,67 @@ import { Field, SelectInput, TextInput } from '../components/ui/Field';
 import { Flash, StatusBadge } from '../components/ui/Flash';
 import { BarcodeSymbol } from '../components/BarcodeSymbol';
 import { ShelfView } from '../components/ShelfView';
-import { useDb, useService, useSession } from '../hooks/useService';
+import { useQuery, useService, useSession } from '../hooks/useService';
 import { buildPayload } from '../lib/barcode';
+import type { Page } from '../services/contracts';
+import type {
+  DigitizationBatch,
+  DigitizationPage,
+  IssueRecord,
+  MapUpload,
+  MovementEvent,
+  RecordFile,
+  Room,
+} from '../types';
+
+const EMPTY_ROOMS: Room[] = [];
+const EMPTY_MOVEMENTS: MovementEvent[] = [];
+const EMPTY_BATCHES: DigitizationBatch[] = [];
+const EMPTY_MAPS: MapUpload[] = [];
+const EMPTY_ISSUE_PAGE: Page<IssueRecord> = { items: [], total: 0, page: 1, pageSize: 500 };
+
+/** A scanned page plus the batch code it belongs to, for the stitching preview. */
+type FilePage = DigitizationPage & { batchCode: string };
 
 export function FileDetailPage() {
   const { fileId } = useParams();
   const navigate = useNavigate();
-  const db = useDb();
   const service = useService();
   const { allowed } = useSession();
-
-  const file = fileId ? service.files.get(fileId) : null;
 
   const [shelfId, setShelfId] = useState('');
   const [position, setPosition] = useState(1);
   const [reason, setReason] = useState('');
   const [flash, setFlash] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
+  // One file id drives every read on this page. `rooms` comes back whole because
+  // the location breadcrumb, the shelf picker and the shelf diagram all derive
+  // from it, and the API has no cheaper single-room-plus-relations endpoint.
+  const {
+    data: file,
+    loading,
+    reload: reloadFile,
+  } = useQuery(() => service.files.get(fileId ?? ''), [fileId], null as RecordFile | null);
+  const { data: rooms } = useQuery(() => service.locations.listRooms(), [], EMPTY_ROOMS);
+  const { data: movements, reload: reloadMovements } = useQuery(
+    () => service.movements.list({ fileId: fileId ?? '', limit: 50 }),
+    [fileId],
+    EMPTY_MOVEMENTS,
+  );
+  const { data: batches } = useQuery(() => service.digitization.batches(), [], EMPTY_BATCHES);
+  const { data: maps } = useQuery(
+    () => service.uploads.maps({ fileBarcode: file?.fileBarcode ?? '' }),
+    [file?.fileBarcode],
+    EMPTY_MAPS,
+  );
+  const { data: openIssues } = useQuery(
+    () => service.issues.list({ open: true, pageSize: 500 }),
+    [],
+    EMPTY_ISSUE_PAGE,
+  );
+
+  // The record arrives from the API, so a missing row and an unanswered read
+  // are different states: only the latter is still loading.
   if (!file) {
     return (
       <div className="space-y-6">
@@ -44,32 +88,36 @@ export function FileDetailPage() {
           <ArrowLeft size={15} /> All files
         </Link>
         <EmptyState
-          title="File not found"
-          description="That id is not in the local registry dataset."
+          title={loading ? 'Loading file' : 'File not found'}
+          description={
+            loading
+              ? 'Asking the registry for this file.'
+              : 'That id is not in the local registry dataset.'
+          }
           action={
-            <Link to="/files" className="focus-ring text-xs font-semibold text-accent">
-              Back to the registry
-            </Link>
+            loading ? undefined : (
+              <Link to="/files" className="focus-ring text-xs font-semibold text-accent">
+                Back to the registry
+              </Link>
+            )
           }
         />
       </div>
     );
   }
 
-  const room = db.rooms.find((item) => item.id === file.roomId);
+  const room = rooms.find((item) => item.id === file.roomId);
   const unit =
     room?.storageUnits.find((item) => item.id === file.almirahId) ?? room?.storageUnits[0];
   const section = room?.sections.find((item) => item.id === file.sectionId);
-  const movements = service.movements.list({ fileId: file.id, limit: 50 });
-  const pages = db.batches
+  const pages: FilePage[] = batches
     .flatMap((batch) => batch.pages.map((page) => ({ ...page, batchCode: batch.code })))
     .filter((page) => page.fileBarcode === file.fileBarcode);
-  const maps = service.uploads.maps({ fileBarcode: file.fileBarcode });
-  const openIssue = db.issues.find(
-    (issue) => issue.status !== 'Returned' && issue.lines.some((line) => line.fileId === file.id),
+  const openIssue = openIssues.items.find((issue) =>
+    issue.lines.some((line) => line.fileId === file.id),
   );
 
-  const shelfOptions = db.rooms.flatMap((item) =>
+  const shelfOptions = rooms.flatMap((item) =>
     item.sections.flatMap((sec) =>
       item.storageUnits
         .filter((u) => u.sectionId === sec.id)
@@ -84,8 +132,8 @@ export function FileDetailPage() {
     ),
   );
 
-  const relocate = () => {
-    const result = service.files.relocate(file.id, shelfId, position, reason);
+  const relocate = async () => {
+    const result = await service.files.relocate(file.id, shelfId, position, reason);
     if (!result.ok) {
       setFlash({ tone: 'danger', text: result.error });
       return;
@@ -96,6 +144,10 @@ export function FileDetailPage() {
     });
     setShelfId('');
     setReason('');
+    // Relocation changes the file row and appends a movement event, so both
+    // reads have to be refetched or the page keeps showing the old shelf.
+    reloadFile();
+    reloadMovements();
   };
 
   return (

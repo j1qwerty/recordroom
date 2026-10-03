@@ -1,4 +1,4 @@
-/**
+﻿/**
  * `issue_file_tbl` with the legacy multi-file flow.
  *
  * `Record.php: multipleFileIssue/savemultipleissuefile/borrow_list/
@@ -33,12 +33,12 @@ function deriveStatus(issue: IssueRecord, now = new Date()): IssueStatus {
 
 function borrowerLabel(issue: IssueRecord): string {
   return issue.borrowerType === 'Employee'
-    ? `${issue.borrowerName} · ${issue.department}`
+    ? `${issue.borrowerName} Â· ${issue.department}`
     : `${issue.borrowerName} (depositor ${issue.borrowerEmployeeCode})`;
 }
 
 export const issuesService: IssueApi = {
-  list(query: IssueQuery = {}) {
+  async list(query: IssueQuery = {}) {
     const state = store.getState();
     const search = query.borrower?.trim().toLowerCase() ?? '';
     const filtered = state.issues.filter((issue) => {
@@ -62,11 +62,11 @@ export const issuesService: IssueApi = {
     };
   },
 
-  get(id) {
+  async get(id) {
     return store.getState().issues.find((issue) => issue.id === id) ?? null;
   },
 
-  borrowers(): BorrowerRow[] {
+  async borrowers(): Promise<BorrowerRow[]> {
     const rows: BorrowerRow[] = [];
     store
       .getState()
@@ -96,7 +96,7 @@ export const issuesService: IssueApi = {
     });
   },
 
-  issueFiles(input: IssueInput) {
+  async issueFiles(input: IssueInput) {
     if (input.fileIds.length === 0) {
       return err('Scan at least one file before issuing.', 'fileIds');
     }
@@ -112,7 +112,8 @@ export const issuesService: IssueApi = {
     }
     if (!input.dueAt) return err('Set a due date for the receipt.', 'dueAt');
 
-    const targets = input.fileIds.map((id) => filesService.get(id));
+    // Promise.all, not a per-item await: map callbacks cannot be async here.
+    const targets = await Promise.all(input.fileIds.map((id) => filesService.get(id)));
     const missing = targets.findIndex((file) => file === null);
     if (missing >= 0) return err('One of the scanned files is not in the registry.', 'fileIds');
 
@@ -128,7 +129,7 @@ export const issuesService: IssueApi = {
     const now = timestamp();
     const record: IssueRecord = {
       id: newId('issue'),
-      receiptNumber: issuesService.nextReceiptNumber(),
+      receiptNumber: await issuesService.nextReceiptNumber(),
       borrowerType: input.borrowerType,
       borrowerName: input.borrowerName.trim() || input.borrowerEmployeeCode.trim(),
       borrowerEmployeeCode: input.borrowerEmployeeCode.trim(),
@@ -192,8 +193,8 @@ export const issuesService: IssueApi = {
     return ok(record);
   },
 
-  returnFiles(issueId, fileIds, condition) {
-    const issue = issuesService.get(issueId);
+  async returnFiles(issueId, fileIds, condition) {
+    const issue = await issuesService.get(issueId);
     if (!issue) return err('Receipt not found.', 'issueId');
     if (!fileIds.length) return err('Select at least one file to return.', 'fileIds');
 
@@ -240,7 +241,7 @@ export const issuesService: IssueApi = {
           to: file.location,
           actor: session.userName(),
           at: now,
-          detail: `Returned against ${issue.receiptNumber}${condition ? ` — condition: ${condition}` : ''}.`,
+          detail: `Returned against ${issue.receiptNumber}${condition ? ` â€” condition: ${condition}` : ''}.`,
           issueId: issue.id,
         });
       });
@@ -258,11 +259,11 @@ export const issuesService: IssueApi = {
     return ok(updated);
   },
 
-  overdue() {
+  async overdue() {
     return store.getState().issues.filter((issue) => issue.status === 'Overdue');
   },
 
-  nextReceiptNumber() {
+  async nextReceiptNumber() {
     const year = new Date().getFullYear();
     const prefix = `ISS-${year}-`;
     const highest = store.getState().issues.reduce((max, issue) => {

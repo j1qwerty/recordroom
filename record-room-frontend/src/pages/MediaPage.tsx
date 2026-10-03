@@ -14,7 +14,10 @@ import { Badge } from '../components/ui/Badge';
 import { Field, FormGrid, TextInput } from '../components/ui/Field';
 import { Flash } from '../components/ui/Flash';
 import { EmptyState } from '../components/ui/EmptyState';
-import { useService } from '../hooks/useService';
+import { useQuery, useService } from '../hooks/useService';
+import type { MediaLinkRecord } from '../services/impl/inquiries';
+
+const EMPTY_LINKS: MediaLinkRecord[] = [];
 
 /**
  * Media and external image links.
@@ -34,7 +37,9 @@ export function MediaPage() {
   const [valid, setValid] = useState(false);
   const [flash, setFlash] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
-  const links = service.media.list();
+  // The stored links come from the service, so a save or remove has to ask again
+  // rather than relying on the local snapshot publishing a new array.
+  const { data: links, loading, reload } = useQuery(() => service.media.list(), [], EMPTY_LINKS);
 
   const validateImage = () =>
     new Promise<boolean>((resolve) => {
@@ -54,7 +59,7 @@ export function MediaPage() {
 
   const save = async () => {
     if (!(await validateImage())) return;
-    const result = service.media.saveLink({ title, url, alt });
+    const result = await service.media.saveLink({ title, url, alt });
     setFlash(
       result.ok
         ? {
@@ -63,6 +68,17 @@ export function MediaPage() {
           }
         : { tone: 'danger', text: result.error },
     );
+    if (result.ok) reload();
+  };
+
+  const remove = async (id: string) => {
+    const result = await service.media.remove(id);
+    setFlash(
+      result.ok
+        ? { tone: 'success', text: 'Link removed.' }
+        : { tone: 'danger', text: result.error },
+    );
+    if (result.ok) reload();
   };
 
   return (
@@ -146,8 +162,12 @@ export function MediaPage() {
             {links.length === 0 ? (
               <div className="p-6">
                 <EmptyState
-                  title="No media links"
-                  description="Validate an image and save its URL."
+                  title={loading ? 'Loading links' : 'No media links'}
+                  description={
+                    loading
+                      ? 'Asking the media service for the stored links.'
+                      : 'Validate an image and save its URL.'
+                  }
                 />
               </div>
             ) : (
@@ -164,7 +184,7 @@ export function MediaPage() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => service.media.remove(link.id)}
+                        onClick={() => void remove(link.id)}
                         className="focus-ring rounded-lg p-1.5 text-[var(--rr-danger)] hover:bg-[var(--rr-surface-2)]"
                         aria-label={`Remove ${link.title}`}
                       >

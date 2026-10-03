@@ -42,8 +42,19 @@ export function LoginPage() {
   const [userName, setUserName] = useState('admin');
   const [secret, setSecret] = useState(service.auth.demoPassword);
   const [otp, setOtp] = useState('');
-  const [issuedOtp, setIssuedOtp] = useState<string | null>(null);
+  /**
+   * The pending OTP step.
+   *
+   * `id` is what decides whether the next press requests a code or verifies one.
+   * `otp` is the demo echo: the in-memory adapter hands the generated code back
+   * so the prototype can complete, while the API deliberately does not, so it
+   * is null there and the operator types whatever was sent.
+   */
+  const [otpChallenge, setOtpChallenge] = useState<{ id: string; otp: string | null } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Progress messages. The API never echoes a code, so "sent" is all we know. */
+  const [notice, setNotice] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
   if (session.get()) return <Navigate to={from} replace />;
 
@@ -52,56 +63,77 @@ export function LoginPage() {
     navigate(from, { replace: true });
   };
 
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault();
     setError(null);
+    setNotice(null);
+    // Every credential check is a round trip now, so the button is held while
+    // one is in flight: a second press would request a second OTP.
+    setPending(true);
 
-    if (mode === 'password') {
-      const result = service.auth.signIn(userName, secret);
-      if (result.ok) complete();
-      else setError(result.error);
-      return;
-    }
-
-    if (mode === 'otp') {
-      if (!issuedOtp) {
-        const challenge = service.auth.requestOtp(userName);
-        if (challenge.ok) {
-          setIssuedOtp(challenge.value.otp);
-          setOtp(challenge.value.otp);
-          setError(null);
-        } else setError(challenge.error);
+    try {
+      if (mode === 'password') {
+        const result = await service.auth.signIn(userName, secret);
+        if (result.ok) complete();
+        else setError(result.error);
         return;
       }
-      const result = service.auth.signInWithOtp(userName, otp);
-      if (result.ok) complete();
-      else setError(result.error);
-      return;
-    }
 
-    if (mode === 'pin') {
-      const result = service.auth.signInWithPin(userName, secret);
-      if (result.ok) complete();
-      else setError(result.error);
-      return;
-    }
+      if (mode === 'otp') {
+        if (!otpChallenge) {
+          const result = await service.auth.requestOtp(userName);
+          if (!result.ok) {
+            setError(result.error);
+            return;
+          }
+          const code = result.value.otp || null;
+          setOtpChallenge({ id: result.value.id, otp: code });
+          setOtp(code ?? '');
+          setNotice(
+            code
+              ? null
+              : 'A code was sent to the registered mobile. Type it here to finish signing in.',
+          );
+          return;
+        }
+        const result = await service.auth.signInWithOtp(userName, otp);
+        if (result.ok) complete();
+        else setError(result.error);
+        return;
+      }
 
-    if (!issuedOtp) {
-      const challenge = service.auth.requestRecovery(userName);
-      if (challenge.ok) {
-        setIssuedOtp(challenge.value.otp);
-        setOtp(challenge.value.otp);
-      } else setError(challenge.error);
-      return;
+      if (mode === 'pin') {
+        const result = await service.auth.signInWithPin(userName, secret);
+        if (result.ok) complete();
+        else setError(result.error);
+        return;
+      }
+
+      if (!otpChallenge) {
+        const result = await service.auth.requestRecovery(userName);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        const code = result.value.otp || null;
+        setOtpChallenge({ id: 'recovery', otp: code });
+        setOtp(code ?? '');
+        setNotice(code ? null : 'A recovery code was sent to the registered mobile.');
+        return;
+      }
+      const result = await service.auth.recoverPassword(userName, otp, secret);
+      if (result.ok) {
+        setError(null);
+        setMode('password');
+        setSecret(service.auth.demoPassword);
+        setOtpChallenge(null);
+        setOtp('');
+      } else setError(result.error);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setPending(false);
     }
-    const result = service.auth.recoverPassword(userName, otp, secret);
-    if (result.ok) {
-      setError(null);
-      setMode('password');
-      setSecret(service.auth.demoPassword);
-      setIssuedOtp(null);
-      setOtp('');
-    } else setError(result.error);
   };
 
   const secretLabel =
@@ -156,7 +188,8 @@ export function LoginPage() {
                     setUserName(account.userName);
                     setSecret(mode === 'pin' ? '1234' : service.auth.demoPassword);
                     setMode('password');
-                    setIssuedOtp(null);
+                    setOtpChallenge(null);
+                    setNotice(null);
                   }}
                   className="focus-ring rounded-xl border border-base p-3 text-left transition hover:border-[var(--rr-accent)] hover:bg-[var(--rr-surface-2)]"
                 >
@@ -193,7 +226,8 @@ export function LoginPage() {
                   onClick={() => {
                     setMode(option.key);
                     setError(null);
-                    setIssuedOtp(null);
+                    setNotice(null);
+                    setOtpChallenge(null);
                     setSecret(option.key === 'pin' ? '1234' : service.auth.demoPassword);
                   }}
                   className={`focus-ring inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
@@ -248,14 +282,20 @@ export function LoginPage() {
                 </Field>
               )}
 
-              {mode === 'otp' && (
+              {/* Shown for OTP sign-in and for password recovery: both need a
+                  code the user has to supply. Hiding it in recover mode made
+                  the reset chain unsatisfiable against the API, which (unlike
+                  the in-memory adapter) never hands the code back. */}
+              {(mode === 'otp' || mode === 'recover') && (
                 <Field
-                  label="One-time password"
+                  label={mode === 'recover' ? 'Recovery code' : 'One-time password'}
                   htmlFor="login-otp"
                   hint={
-                    issuedOtp
-                      ? `Demo code ${issuedOtp} was generated and pre-filled.`
-                      : 'Press continue to generate a demo code.'
+                    !otpChallenge
+                      ? 'Press continue to generate a code.'
+                      : otpChallenge.otp
+                        ? `Demo code ${otpChallenge.otp} was generated and pre-filled.`
+                        : 'Enter the code that was sent to the registered mobile.'
                   }
                 >
                   <TextInput
@@ -267,16 +307,25 @@ export function LoginPage() {
                 </Field>
               )}
 
+              {notice && <Flash tone="info" text={notice} onDismiss={() => setNotice(null)} />}
+
               {error && <Flash tone="danger" text={error} onDismiss={() => setError(null)} />}
 
-              <Button type="submit" className="w-full" icon={<ArrowRight size={17} />}>
-                {mode === 'recover'
-                  ? issuedOtp
-                    ? 'Set new password'
-                    : 'Send recovery code'
-                  : mode === 'otp' && !issuedOtp
-                    ? 'Generate code'
-                    : 'Sign in'}
+              <Button
+                type="submit"
+                className="w-full"
+                icon={<ArrowRight size={17} />}
+                disabled={pending}
+              >
+                {pending
+                  ? 'Working…'
+                  : mode === 'recover'
+                    ? otpChallenge
+                      ? 'Set new password'
+                      : 'Send recovery code'
+                    : mode === 'otp' && !otpChallenge
+                      ? 'Generate code'
+                      : 'Sign in'}
               </Button>
             </form>
 

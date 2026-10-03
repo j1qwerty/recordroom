@@ -13,13 +13,13 @@ import { ROLES, type AppUser } from '../../types';
 import { log } from './audit';
 
 export const usersService: UsersApi = {
-  list() {
+  async list() {
     return [...store.getState().users].sort((a, b) =>
       a.userName.localeCompare(b.userName, 'en-IN'),
     );
   },
 
-  create(input) {
+  async create(input) {
     const userName = input.userName.trim().toLowerCase();
     if (!userName) return err('User name is required.', 'userName');
     if (!/^[a-z0-9._-]{3,32}$/.test(userName)) {
@@ -29,12 +29,19 @@ export const usersService: UsersApi = {
       return err(`${userName} already has a login.`, 'userName');
     }
     if (!input.displayName.trim()) return err('Display name is required.', 'displayName');
+    if (input.password.length < 8) {
+      return err('Password must be at least 8 characters.', 'password');
+    }
 
+    // The password is write-only and is deliberately not spread into the record:
+    // an explicit field list is the only way to guarantee it cannot reach the
+    // stored snapshot or the audit trail.
     const user: AppUser = {
-      ...input,
       id: newId('user'),
       userName,
       displayName: input.displayName.trim(),
+      role: input.role,
+      employeeCode: input.employeeCode,
       active: input.active ?? true,
       lastLoginAt: timestamp(),
     };
@@ -53,7 +60,7 @@ export const usersService: UsersApi = {
     return ok(user);
   },
 
-  update(id, input) {
+  async update(id, input) {
     const current = store.getState().users.find((user) => user.id === id);
     if (!current) return err('User not found.', 'id');
     if (input.userName && input.userName.trim().toLowerCase() !== current.userName) {
@@ -92,7 +99,7 @@ export const usersService: UsersApi = {
     return ok(updated);
   },
 
-  remove(id) {
+  async remove(id) {
     const current = store.getState().users.find((user) => user.id === id);
     if (!current) return err('User not found.', 'id');
     const state = store.getState();
@@ -116,5 +123,7 @@ export const usersService: UsersApi = {
     return ok(true);
   },
 
-  roles: () => [...ROLES],
+  async roles() {
+    return [...ROLES];
+  },
 };

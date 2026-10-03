@@ -17,11 +17,13 @@ import { Field, TextInput } from '../components/ui/Field';
 import { Flash, StatusBadge } from '../components/ui/Flash';
 import { RoomMap } from '../components/RoomMap';
 import { ShelfView } from '../components/ShelfView';
-import { useDb, useService, useSession } from '../hooks/useService';
+import { useQuery, useService, useSession } from '../hooks/useService';
 import { cn } from '../lib/utils';
-import type { StorageStatus, StorageUnit } from '../types';
+import type { Room, StorageStatus, StorageUnit } from '../types';
 
 const STATUSES: StorageStatus[] = ['Active', 'Maintenance', 'Inactive', 'Decommissioned'];
+
+type Revision = { revision: number; note: string; at: string; actor: string };
 
 type Dialog =
   | { kind: 'section'; roomId: string }
@@ -40,42 +42,88 @@ type Dialog =
  * reports the refusal.
  */
 export function LocationsPage() {
-  const db = useDb();
   const service = useService();
   const { allowed } = useSession();
 
-  const [roomId, setRoomId] = useState(db.rooms[0]?.id ?? '');
+  const [roomId, setRoomId] = useState('');
   const [sectionId, setSectionId] = useState('');
   const [almirahId, setAlmirahId] = useState('');
   const [dialog, setDialog] = useState<Dialog>(null);
   const [flash, setFlash] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
   const [layoutNote, setLayoutNote] = useState('');
 
-  const room = db.rooms.find((item) => item.id === roomId) ?? db.rooms[0];
+  // The whole hierarchy comes from one read: a room carries its sections, and
+  // each storage unit carries its shelves. Asking per level would refetch the
+  // entire tree once for every level touched.
+  const {
+    data: rooms,
+    loading,
+    reload,
+  } = useQuery(() => service.locations.listRooms(), [], [] as Room[]);
+
+  const room = rooms.find((item) => item.id === roomId) ?? rooms[0];
   const section = room?.sections.find((item) => item.id === sectionId) ?? room?.sections[0];
   const units = room?.storageUnits.filter((unit) => unit.sectionId === section?.id) ?? [];
   const unit = units.find((item) => item.id === almirahId) ?? units[0];
 
-  const revisions = room ? service.locations.layoutRevisions(room.id) : [];
+  const selectedRoomId = room?.id ?? '';
+  const { data: revisions, reload: reloadRevisions } = useQuery(
+    () =>
+      selectedRoomId
+        ? service.locations.layoutRevisions(selectedRoomId)
+        : Promise.resolve([] as Revision[]),
+    [selectedRoomId],
+    [] as Revision[],
+  );
 
-  const report = (result: { ok: boolean; error?: string }) => {
+  // File counts per shelf label. One fan-out rather than a call inside the
+  // render loop, so switching almirah does not leave a stale count behind.
+  const shelfIds = (unit?.shelves ?? []).map((item) => item.id);
+  const shelfKey = shelfIds.join('|');
+  const { data: shelfCounts } = useQuery(
+    async () => {
+      if (shelfIds.length === 0) return {} as Record<string, number>;
+      const counts = await Promise.all(
+        shelfIds.map(async (id) => [id, (await service.files.byShelf(id)).length] as const),
+      );
+      return Object.fromEntries(counts);
+    },
+    [shelfKey],
+    {} as Record<string, number>,
+  );
+
+  const report = async (pending: Promise<{ ok: boolean; error?: string }>) => {
+    const result = await pending;
     setFlash(
       result.ok
         ? { tone: 'success', text: 'Layout updated.' }
         : { tone: 'danger', text: result.error ?? 'That change was refused.' },
     );
-    if (result.ok) setDialog(null);
+    if (result.ok) {
+      setDialog(null);
+      reload();
+    }
   };
 
-  const saveLayout = () => {
-    const outcome = service.locations.saveLayout(roomId, layoutNote);
+  const saveLayout = async () => {
+    // `roomId` starts empty so the first room can fall into place; the resolved
+    // room is what the revision is actually filed against.
+    const outcome = await service.locations.saveLayout(selectedRoomId || roomId, layoutNote);
     setFlash(
       outcome.ok
         ? { tone: 'success', text: `Layout revision ${outcome.value.revision} saved.` }
         : { tone: 'danger', text: outcome.error },
     );
-    if (outcome.ok) setLayoutNote('');
+    if (outcome.ok) {
+      setLayoutNote('');
+      reload();
+      reloadRevisions();
+    }
   };
+
+  if (loading && rooms.length === 0) {
+    return <p className="muted">Loading rooms…</p>;
+  }
 
   if (!room) {
     return <p className="muted">No rooms are configured.</p>;
@@ -106,10 +154,10 @@ export function LocationsPage() {
                 <Buildings size={18} className="text-accent" />
                 <p className="text-sm font-semibold">Rooms</p>
               </div>
-              <Badge tone="neutral">{db.rooms.length}</Badge>
+              <Badge tone="neutral">{rooms.length}</Badge>
             </div>
             <div className="mt-4 space-y-2">
-              {db.rooms.map((item) => (
+              {rooms.map((item) => (
                 <button
                   key={item.id}
                   type="button"
@@ -354,7 +402,7 @@ export function LocationsPage() {
                   <ShelfView unit={unit} />
                   <div className="space-y-2">
                     {unit.shelves.map((shelf) => {
-                      const files = service.files.byShelf(shelf.id);
+                      const files = shelfCounts[shelf.id] ?? 0;
                       return (
                         <div key={shelf.id} className="rounded-xl border border-base p-3">
                           <div className="flex items-center justify-between gap-2">
@@ -362,7 +410,7 @@ export function LocationsPage() {
                             <StatusBadge status={shelf.status} />
                           </div>
                           <p className="muted mt-1.5 text-[11px]">
-                            {files.length} file(s) Â· {shelf.occupied}/{shelf.capacity} approx.
+                            {files} file(s) Â· {shelf.occupied}/{shelf.capacity} approx.
                           </p>
                           {allowed('locations.edit') && (
                             <div className="mt-2 flex gap-2">

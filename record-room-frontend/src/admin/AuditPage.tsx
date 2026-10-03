@@ -6,10 +6,13 @@ import { Button } from '../components/ui/Button';
 import { Badge } from '../components/ui/Badge';
 import { SelectInput, TextInput } from '../components/ui/Field';
 import { EmptyState } from '../components/ui/EmptyState';
-import { useService } from '../hooks/useService';
+import { useQuery, useService } from '../hooks/useService';
 import { AUDIT_ACTIONS, auditRowsToCsv } from '../services';
 import { downloadCsv, slugify, toCsv } from '../lib/csv';
-import type { AuditAction, LoginOutcome } from '../types';
+import type { AuditAction, AuditEntry, LoginHistoryEntry, LoginOutcome } from '../types';
+
+const EMPTY_ENTRIES: AuditEntry[] = [];
+const EMPTY_LOGINS: LoginHistoryEntry[] = [];
 
 const OUTCOMES: Array<LoginOutcome | 'All'> = ['All', 'Success', 'Failed', 'Signed out'];
 
@@ -33,6 +36,10 @@ const ACTION_TONE: Record<AuditAction, 'success' | 'warning' | 'danger' | 'info'
  * The previous audit screen showed four static rows with no actor, IP or
  * before/after state. Every entry here is written by the service that made the
  * change, so the trail carries the actor, role, address and both states.
+ *
+ * Both tabs load at once because each tab button quotes its own row count. The
+ * reads are async, so the filters become `useQuery` deps and an empty result set
+ * distinguishes "loading" from "nothing matched".
  */
 export function AuditPage() {
   const service = useService();
@@ -45,9 +52,17 @@ export function AuditPage() {
 
   const [outcome, setOutcome] = useState<LoginOutcome | 'All'>('All');
 
-  const entries = service.audit.list({ search, action, actor, limit: 300 });
-  const logins = service.audit.loginHistory({ search, outcome });
-  const actors = service.audit.actors();
+  const { data: entries, loading: loadingEntries } = useQuery(
+    () => service.audit.list({ search, action, actor, limit: 300 }),
+    [search, action, actor],
+    EMPTY_ENTRIES,
+  );
+  const { data: logins, loading: loadingLogins } = useQuery(
+    () => service.audit.loginHistory({ search, outcome }),
+    [search, outcome],
+    EMPTY_LOGINS,
+  );
+  const { data: actors } = useQuery(() => service.audit.actors(), [], [] as string[]);
 
   const exportAudit = () => {
     downloadCsv(
@@ -189,8 +204,12 @@ export function AuditPage() {
           entries.length === 0 ? (
             <div className="p-6">
               <EmptyState
-                title="No audit entries match"
-                description="Clear the filters, or make a change on the issue, return or location screens to see a new entry."
+                title={loadingEntries ? 'Loading audit entries' : 'No audit entries match'}
+                description={
+                  loadingEntries
+                    ? 'Asking the audit service for entries that match these filters.'
+                    : 'Clear the filters, or make a change on the issue, return or location screens to see a new entry.'
+                }
               />
             </div>
           ) : (
@@ -232,8 +251,12 @@ export function AuditPage() {
         ) : logins.length === 0 ? (
           <div className="p-6">
             <EmptyState
-              title="No login attempts match"
-              description="Clear the filters to see the full history."
+              title={loadingLogins ? 'Loading login attempts' : 'No login attempts match'}
+              description={
+                loadingLogins
+                  ? 'Asking the audit service for login attempts that match these filters.'
+                  : 'Clear the filters to see the full history.'
+              }
             />
           </div>
         ) : (

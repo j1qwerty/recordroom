@@ -91,15 +91,15 @@ function tally(rows: BulkImportRow[]) {
 }
 
 export const bulkService: BulkApi = {
-  jobs() {
+  async jobs() {
     return [...store.getState().bulkJobs].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   },
 
-  job(id) {
+  async job(id) {
     return store.getState().bulkJobs.find((job) => job.id === id) ?? null;
   },
 
-  validateCsv(csv, folder) {
+  async validateCsv(csv, folder) {
     const lines = csv
       .split(/\r?\n/)
       .map((line) => line.trim())
@@ -171,85 +171,88 @@ export const bulkService: BulkApi = {
     return ok(job);
   },
 
-  commit(jobId) {
-    const job = bulkService.job(jobId);
+  async commit(jobId) {
+    const job = await bulkService.job(jobId);
     if (!job) return err('Import job not found.', 'jobId');
     if (job.status === 'Committed') return err('This job was already committed.', 'jobId');
     if (job.accepted === 0) return err('Nothing to commit: every row was rejected.', 'jobId');
 
+    // Resolve every target shelf up front. store.update is synchronous, so a lookup
+    // cannot happen inside it.
+    const accepted = job.rows.filter((row) => row.result === 'Accepted');
+    const shelves = await Promise.all(
+      accepted.map((row) => locationsService.findShelfByBarcode(row.shelfBarcode)),
+    );
+    const resolved = accepted.map((row, index) => ({ row, shelf: shelves[index] }));
+
     store.update((draft) => {
       const now = timestamp();
-      job.rows
-        .filter((row) => row.result === 'Accepted')
-        .forEach((row) => {
-          const shelf = locationsService.findShelfByBarcode(row.shelfBarcode);
-          if (!shelf) {
-            row.result = 'Unknown shelf';
-            row.detail = 'Shelf disappeared between validation and commit.';
-            return;
-          }
-          const unit = draft.rooms
-            .flatMap((item) => item.storageUnits)
-            .find((item) => item.id === shelf.almirahId);
-          const room = draft.rooms.find((item) => item.id === unit?.roomId);
-          const section = room?.sections.find((item) => item.id === unit?.sectionId);
-          const barcode = row.fileBarcode.trim().toUpperCase();
+      for (const { row, shelf } of resolved) {
+        if (!shelf) {
+          row.result = 'Unknown shelf';
+          row.detail = 'Shelf disappeared between validation and commit.';
+          continue;
+        }
+        const unit = draft.rooms
+          .flatMap((item) => item.storageUnits)
+          .find((item) => item.id === shelf.almirahId);
+        const room = draft.rooms.find((item) => item.id === unit?.roomId);
+        const section = room?.sections.find((item) => item.id === unit?.sectionId);
+        const barcode = row.fileBarcode.trim().toUpperCase();
 
-          draft.files.push({
-            id: newId('file'),
-            fileBarcode: barcode,
-            rfId: barcode,
-            fileNumber: `BULK/${new Date().getFullYear()}/${barcode.slice(-4)}`,
-            subject: row.subject.trim(),
-            department: 'Unverified',
-            year: new Date().getFullYear(),
-            fileType: 'File',
-            status: 'Available',
-            location: [room?.code, section?.code, unit?.code, shelf.code]
-              .filter(Boolean)
-              .join(' / '),
-            roomId: room?.id ?? '',
-            sectionId: section?.id ?? '',
-            section: section?.code ?? '',
-            almirahId: unit?.id ?? '',
-            almirah: unit?.code ?? '',
-            shelfId: shelf.id,
-            shelf: shelf.code,
-            shelfBarcode: shelf.barcode,
-            position: Math.min(100, shelf.occupied + 1),
-            pincode: '',
-            area: '',
-            propertyNo: '',
-            propertyArea: '',
-            dealer: '',
-            codalLife: 'As per department rules',
-            createdAt: now.slice(0, 10),
-            createdBy: session.userName(),
-            updatedAt: now.slice(0, 10),
-            updatedBy: session.userName(),
-            lastMovement: now,
-            description: 'Created by bulk import; department and area need verification.',
-          });
-
-          const targetShelf = draft.rooms
-            .flatMap((item) => item.storageUnits)
-            .find((item) => item.id === shelf.almirahId)
-            ?.shelves.find((item) => item.id === shelf.id);
-          if (targetShelf) targetShelf.occupied += 1;
-
-          draft.movements.unshift({
-            id: newId('mv'),
-            kind: 'File created',
-            fileId: barcode,
-            fileBarcode: barcode,
-            subject: row.subject.trim(),
-            from: 'bulk staging',
-            to: shelf.code,
-            actor: session.userName(),
-            at: now,
-            detail: `Committed from ${job.filename} row ${row.rowNo}.`,
-          });
+        draft.files.push({
+          id: newId('file'),
+          fileBarcode: barcode,
+          rfId: barcode,
+          fileNumber: `BULK/${new Date().getFullYear()}/${barcode.slice(-4)}`,
+          subject: row.subject.trim(),
+          department: 'Unverified',
+          year: new Date().getFullYear(),
+          fileType: 'File',
+          status: 'Available',
+          location: [room?.code, section?.code, unit?.code, shelf.code].filter(Boolean).join(' / '),
+          roomId: room?.id ?? '',
+          sectionId: section?.id ?? '',
+          section: section?.code ?? '',
+          almirahId: unit?.id ?? '',
+          almirah: unit?.code ?? '',
+          shelfId: shelf.id,
+          shelf: shelf.code,
+          shelfBarcode: shelf.barcode,
+          position: Math.min(100, shelf.occupied + 1),
+          pincode: '',
+          area: '',
+          propertyNo: '',
+          propertyArea: '',
+          dealer: '',
+          codalLife: 'As per department rules',
+          createdAt: now.slice(0, 10),
+          createdBy: session.userName(),
+          updatedAt: now.slice(0, 10),
+          updatedBy: session.userName(),
+          lastMovement: now,
+          description: 'Created by bulk import; department and area need verification.',
         });
+
+        const targetShelf = draft.rooms
+          .flatMap((item) => item.storageUnits)
+          .find((item) => item.id === shelf.almirahId)
+          ?.shelves.find((item) => item.id === shelf.id);
+        if (targetShelf) targetShelf.occupied += 1;
+
+        draft.movements.unshift({
+          id: newId('mv'),
+          kind: 'File created',
+          fileId: barcode,
+          fileBarcode: barcode,
+          subject: row.subject.trim(),
+          from: 'bulk staging',
+          to: shelf.code,
+          actor: session.userName(),
+          at: now,
+          detail: `Committed from ${job.filename} row ${row.rowNo}.`,
+        });
+      }
 
       const target = draft.bulkJobs.find((item) => item.id === jobId);
       if (target) {
@@ -268,6 +271,7 @@ export const bulkService: BulkApi = {
       });
     });
 
-    return ok(bulkService.job(jobId)!);
+    const committed = await bulkService.job(jobId);
+    return committed ? ok(committed) : err('Import job not found.', 'jobId');
   },
 };

@@ -8,8 +8,13 @@ import { Badge } from '../components/ui/Badge';
 import { Field, TextInput } from '../components/ui/Field';
 import { Flash, StatusBadge } from '../components/ui/Flash';
 import { BarcodeSymbol } from '../components/BarcodeSymbol';
-import { useService } from '../hooks/useService';
-import type { BarcodeSubject } from '../types';
+import { useQuery, useService } from '../hooks/useService';
+import type { BarcodeSubject, ScanResult } from '../types';
+
+const EMPTY_SCAN: ScanResult = { ok: false, payload: null, message: 'Nothing scanned yet.' };
+
+/** What the right-hand panel renders: the parse result plus its resolution. */
+type ScanOutcome = { result: ScanResult; resolution: Resolution | null };
 
 /**
  * Barcode validation endpoint stand-in.
@@ -26,10 +31,24 @@ export function ScanPage() {
   const [raw, setRaw] = useState(params.get('p') ?? '');
   const [submitted, setSubmitted] = useState(params.get('p') ?? '');
 
-  const result = service.barcodes.validate(submitted);
-  const payload = result.payload;
+  // Validating a payload is two round trips: parse it, then resolve whatever it
+  // points at. Both live in one query so the two stay consistent with each other.
+  const { data: outcome, loading } = useQuery(
+    async () => {
+      if (!submitted) return null;
+      const result = await service.barcodes.validate(submitted);
+      const resolution = result.payload
+        ? await resolve(service, result.payload.subject, result.payload.label)
+        : null;
+      return { result, resolution };
+    },
+    [submitted],
+    null as ScanOutcome | null,
+  );
 
-  const resolution = payload ? resolve(service, payload.subject, payload.label) : null;
+  const result = outcome?.result ?? EMPTY_SCAN;
+  const payload = result.payload;
+  const resolution = outcome?.resolution ?? null;
 
   return (
     <div className="space-y-6">
@@ -92,6 +111,11 @@ export function ScanPage() {
                 Scan a file, shelf, almirah, section, room or area label to resolve it.
               </p>
             </div>
+          ) : loading && !outcome ? (
+            <div className="rounded-xl border border-dashed border-base p-10 text-center">
+              <p className="text-sm font-semibold">Resolving payload</p>
+              <p className="muted mt-2 text-xs">Parsing the payload and looking it up.</p>
+            </div>
           ) : !result.ok || !payload ? (
             <Flash tone="danger" text={result.message} />
           ) : (
@@ -145,13 +169,13 @@ type Resolution =
   | { kind: 'resolved'; detail: ReactNode; links: Array<{ to: string; label: string }> }
   | { kind: 'unknown' };
 
-function resolve(
+async function resolve(
   service: ReturnType<typeof useService>,
   subject: BarcodeSubject,
   value: string,
-): Resolution {
+): Promise<Resolution> {
   if (subject === 'File') {
-    const file = service.files.byBarcode(value);
+    const file = await service.files.byBarcode(value);
     if (!file) return { kind: 'unknown' };
     return {
       kind: 'resolved',
@@ -191,9 +215,10 @@ function resolve(
   }
 
   if (subject === 'Shelf') {
-    const shelf = service.locations.findShelfByBarcode(value);
+    // The files call needs the shelf id, so these two are necessarily sequential.
+    const shelf = await service.locations.findShelfByBarcode(value);
     if (!shelf) return { kind: 'unknown' };
-    const files = service.files.byShelf(shelf.id);
+    const files = await service.files.byShelf(shelf.id);
     return {
       kind: 'resolved',
       links: [{ to: '/files', label: 'Registry' }],
@@ -232,7 +257,7 @@ function resolve(
   }
 
   if (subject === 'Almirah') {
-    for (const room of service.locations.listRooms()) {
+    for (const room of await service.locations.listRooms()) {
       const unit = room.storageUnits.find(
         (item) =>
           item.barcode.toUpperCase() === value.toUpperCase() ||
@@ -261,7 +286,7 @@ function resolve(
   }
 
   if (subject === 'Section') {
-    for (const room of service.locations.listRooms()) {
+    for (const room of await service.locations.listRooms()) {
       const section = room.sections.find(
         (item) =>
           item.code.toUpperCase() === value.toUpperCase() ||
@@ -289,9 +314,9 @@ function resolve(
   }
 
   if (subject === 'Room') {
-    const room = service.locations
-      .listRooms()
-      .find((item) => item.code.toUpperCase() === value.toUpperCase());
+    const room = (await service.locations.listRooms()).find(
+      (item) => item.code.toUpperCase() === value.toUpperCase(),
+    );
     if (!room) return { kind: 'unknown' };
     return {
       kind: 'resolved',
@@ -310,9 +335,9 @@ function resolve(
     };
   }
 
-  const area = service.locations
-    .areas()
-    .find((item) => item.name.toUpperCase() === value.toUpperCase() || item.pincode === value);
+  const area = (await service.locations.areas()).find(
+    (item) => item.name.toUpperCase() === value.toUpperCase() || item.pincode === value,
+  );
   if (!area) return { kind: 'unknown' };
   return {
     kind: 'resolved',

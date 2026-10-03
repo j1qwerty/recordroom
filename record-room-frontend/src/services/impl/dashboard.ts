@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Dashboard aggregates.
  *
  * The legacy `search_dashboard_file` screen derived its counts from SQL. The
@@ -15,10 +15,10 @@ import { issuesService } from './issues';
 const TOTAL_RECORDS_HISTORICAL = 2_478_450;
 
 export const dashboardService: DashboardApi = {
-  stats(): DashboardStats {
+  async stats(): Promise<DashboardStats> {
     const state = store.getState();
     const openIssues = state.issues.filter((issue) => issue.status !== 'Returned');
-    const overdue = issuesService.overdue();
+    const overdue = await issuesService.overdue();
     const dueToday = openIssues.filter((issue) => {
       const days = Math.ceil((new Date(issue.dueAt).getTime() - Date.now()) / 86_400_000);
       return days <= 0;
@@ -42,12 +42,12 @@ export const dashboardService: DashboardApi = {
         : 0,
       overdueCount: overdue.length,
       roomCount: state.rooms.length,
-      activeBorrowers: issuesService.borrowers().length,
-      pendingApprovals: digitizationService.pendingReviewCount(),
+      activeBorrowers: (await issuesService.borrowers()).length,
+      pendingApprovals: await digitizationService.pendingReviewCount(),
     };
   },
 
-  activity(limit = 6): TimelineEvent[] {
+  async activity(limit = 6): Promise<TimelineEvent[]> {
     const toneFor = (kind: string): TimelineEvent['tone'] => {
       if (kind === 'Issue') return 'warning';
       if (kind === 'Return') return 'success';
@@ -64,8 +64,8 @@ export const dashboardService: DashboardApi = {
         id: event.id,
         label: event.kind,
         date: event.at.slice(5, 16).replace('T', ' '),
-        actor: `${event.kind} · ${event.actor}`,
-        detail: `${event.fileBarcode} — ${event.detail}`,
+        actor: `${event.kind} Â· ${event.actor}`,
+        detail: `${event.fileBarcode} â€” ${event.detail}`,
         tone: toneFor(event.kind),
       }));
   },

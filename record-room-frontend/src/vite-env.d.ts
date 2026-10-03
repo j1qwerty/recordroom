@@ -1,14 +1,16 @@
 /// <reference types="vite/client" />
 
 /**
- * No environment variables are required by this frontend build.
+ * `VITE_API_MODE` selects the service implementation: `local` (default) uses the
+ * in-memory adapter, `http` talks to the .NET 10 API.
  *
- * The app runs entirely on the local service layer in `src/services`. The
- * .NET 10 API will need a base URL once it exists — add
- * `readonly VITE_API_BASE_URL?: string;` at that point, not before, so no
- * placeholder credential ships in the bundle.
+ * `VITE_API_BASE_URL` is read only in `http` mode. Neither is required: with no
+ * `.env` file the app runs entirely on the local service layer.
+ *
+ * There is deliberately no Firebase configuration here. See AGENTS.md.
  */
 interface ImportMetaEnv {
+  readonly VITE_API_MODE?: 'local' | 'http';
   readonly VITE_API_BASE_URL?: string;
 }
 

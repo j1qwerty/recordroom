@@ -17,8 +17,15 @@ import { Modal } from '../components/ui/Modal';
 import { Field, SelectInput, TextArea, TextInput } from '../components/ui/Field';
 import { Flash } from '../components/ui/Flash';
 import { EmptyState } from '../components/ui/EmptyState';
-import { useService, useSession } from '../hooks/useService';
-import { DIGITIZATION_FOLDERS, FOLDER_LABELS, type DigitizationFolder } from '../types';
+import { useQuery, useService, useSession } from '../hooks/useService';
+import type { Page } from '../services/contracts';
+import {
+  DIGITIZATION_FOLDERS,
+  FOLDER_LABELS,
+  type DigitizationBatch,
+  type DigitizationFolder,
+  type Employee,
+} from '../types';
 
 const STATUS_TONE = {
   'In progress': 'info',
@@ -45,10 +52,26 @@ export function DigitizationPage() {
   const [creating, setCreating] = useState(false);
   const [flash, setFlash] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
-  const batches = service.digitization.batches({ search, employeeCode, folder });
-  const employees = service.employees.list({ pageSize: 100 }).items;
+  // The API owns the filtering, so the rows on screen are exactly what it
+  // returned for the current search, employee and folder.
+  const {
+    data: batches,
+    loading,
+    reload,
+  } = useQuery(
+    () => service.digitization.batches({ search, employeeCode, folder }),
+    [search, employeeCode, folder],
+    [] as DigitizationBatch[],
+  );
+  const { data: employees } = useQuery<Page<Employee>>(
+    () => service.employees.list({ pageSize: 100 }),
+    [],
+    { items: [], total: 0, page: 1, pageSize: 100 },
+  );
+  const { data: pending } = useQuery(() => service.digitization.pendingReviewCount(), [], 0);
+
+  const employeeOptions = employees.items;
   const allPages = batches.flatMap((batch) => batch.pages);
-  const pending = service.digitization.pendingReviewCount();
 
   return (
     <div className="space-y-7">
@@ -102,7 +125,7 @@ export function DigitizationPage() {
             aria-label="Filter by employee"
           >
             <option value="">All employees</option>
-            {employees.map((employee) => (
+            {employeeOptions.map((employee) => (
               <option key={employee.id} value={employee.employeeCode}>
                 {employee.employeeCode} · {employee.name}
               </option>
@@ -125,8 +148,12 @@ export function DigitizationPage() {
         {batches.length === 0 ? (
           <div className="p-6">
             <EmptyState
-              title="No batches match"
-              description="Clear the filters, or open a new batch for an employee."
+              title={loading ? 'Loading batches' : 'No batches match'}
+              description={
+                loading
+                  ? 'Asking the digitization register for the matching batches.'
+                  : 'Clear the filters, or open a new batch for an employee.'
+              }
             />
           </div>
         ) : (
@@ -199,13 +226,13 @@ export function DigitizationPage() {
 
       <Modal open={creating} onClose={() => setCreating(false)} title="New digitization batch">
         <BatchForm
-          employees={employees.map((employee) => ({
+          employees={employeeOptions.map((employee) => ({
             code: employee.employeeCode,
             name: employee.name,
             status: employee.status,
           }))}
-          onSubmit={(input) => {
-            const result = service.digitization.createBatch(input);
+          onSubmit={async (input) => {
+            const result = await service.digitization.createBatch(input);
             if (!result.ok) {
               setFlash({ tone: 'danger', text: result.error });
               return;
@@ -215,6 +242,8 @@ export function DigitizationPage() {
               tone: 'success',
               text: `${result.value.code} opened for ${result.value.employeeName}.`,
             });
+            // A new batch changes what the list should be showing.
+            reload();
           }}
         />
       </Modal>

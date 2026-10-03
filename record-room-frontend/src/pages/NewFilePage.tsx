@@ -7,10 +7,11 @@ import { Button } from '../components/ui/Button';
 import { Field, FormGrid, SelectInput, TextArea, TextInput } from '../components/ui/Field';
 import { Flash } from '../components/ui/Flash';
 import { BarcodeSymbol } from '../components/BarcodeSymbol';
-import { useDb, useService } from '../hooks/useService';
+import { useQuery, useService } from '../hooks/useService';
 import { buildPayload } from '../lib/barcode';
 import { nextFileBarcode } from '../services/impl/files';
-import type { FileCreateInput, FileType } from '../types';
+import type { Area, FileCreateInput, FileType, RecordFile, StorageStatus } from '../types';
+import type { Page, RecordRoomService } from '../services/contracts';
 
 const FILE_TYPES: FileType[] = ['Letter', 'File', 'Register', 'Map', 'Drawing', 'Report'];
 const COAL_LIVES = [
@@ -21,6 +22,8 @@ const COAL_LIVES = [
   'Permanent',
   'As per department rules',
 ];
+
+const EMPTY_FILES: Page<RecordFile> = { items: [], total: 0, page: 1, pageSize: 200 };
 
 const emptyForm: FileCreateInput = {
   fileBarcode: '',
@@ -39,6 +42,68 @@ const emptyForm: FileCreateInput = {
   description: '',
 };
 
+/** One row of the location tree, flattened for the shelf dropdowns. */
+interface ShelfPath {
+  id: string;
+  status: StorageStatus;
+  barcode: string;
+  code: string;
+  capacity: number;
+  occupied: number;
+  free: number;
+  /** `room / section / almirah / shelf`, as shown to the operator. */
+  label: string;
+  /** Same path without the section, as the blocked-shelf notice used to read. */
+  blockedLabel: string;
+  path: string;
+}
+
+/**
+ * Walks room → section → almirah → shelf in parallel and flattens the result.
+ *
+ * The API owns the hierarchy, so the dropdown cannot be built from a local
+ * snapshot: every level is a request, and they are issued together because the
+ * next level needs the ids from the one before it.
+ */
+async function loadShelfPaths(service: RecordRoomService): Promise<ShelfPath[]> {
+  const rooms = await service.locations.listRooms();
+  const perRoom = await Promise.all(rooms.map((room) => service.locations.sectionsOf(room.id)));
+  const perSection = await Promise.all(
+    perRoom.flatMap((list) => list.map((section) => service.locations.unitsOf(section.id))),
+  );
+  const perUnit = await Promise.all(
+    perSection.flatMap((list) => list.map((unit) => service.locations.shelvesOf(unit.id))),
+  );
+
+  const paths: ShelfPath[] = [];
+  let sectionAt = 0;
+  let unitAt = 0;
+  let shelfAt = 0;
+
+  for (const room of rooms) {
+    for (const section of perRoom[sectionAt++]) {
+      for (const unit of perSection[unitAt++]) {
+        for (const shelf of perUnit[shelfAt++]) {
+          paths.push({
+            id: shelf.id,
+            status: shelf.status,
+            barcode: shelf.barcode,
+            code: shelf.code,
+            capacity: shelf.capacity,
+            occupied: shelf.occupied,
+            free: shelf.capacity - shelf.occupied,
+            label: `${room.code} / ${section.name} / ${unit.code} / ${shelf.code}`,
+            blockedLabel: `${room.code} / ${unit.code} / ${shelf.code}`,
+            path: [room.code, section.code, unit.code, shelf.code].filter(Boolean).join(' / '),
+          });
+        }
+      }
+    }
+  }
+
+  return paths;
+}
+
 /**
  * File registration with the legacy guards applied.
  *
@@ -47,61 +112,66 @@ const emptyForm: FileCreateInput = {
  * `filesService.validateCreate` before the write is allowed.
  */
 export function NewFilePage() {
-  const db = useDb();
   const service = useService();
   const navigate = useNavigate();
 
-  const [form, setForm] = useState<FileCreateInput>(() => ({
-    ...emptyForm,
-    fileBarcode: nextFileBarcode(db.files),
-  }));
-  const [error, setError] = useState<string | null>(null);
-  const [createdId, setCreatedId] = useState<string | null>(null);
-
-  const set = <K extends keyof FileCreateInput>(key: K, value: FileCreateInput[K]) =>
-    setForm((current) => ({ ...current, [key]: value }));
-
-  // Room → section → almirah → shelf, only active shelves are selectable.
-  const shelfOptions = useMemo(
-    () =>
-      db.rooms.flatMap((room) =>
-        room.sections.flatMap((section) =>
-          room.storageUnits
-            .filter((unit) => unit.sectionId === section.id)
-            .flatMap((unit) =>
-              unit.shelves
-                .filter((shelf) => shelf.status === 'Active')
-                .map((shelf) => ({
-                  id: shelf.id,
-                  label: `${room.code} / ${section.name} / ${unit.code} / ${shelf.code}`,
-                  barcode: shelf.barcode,
-                  free: shelf.capacity - shelf.occupied,
-                })),
-            ),
-        ),
-      ),
-    [db.rooms],
+  // `nextFileBarcode` needs the live series, which only the API can report, so
+  // the highest barcodes are asked for rather than read off the local snapshot.
+  const { data: recent, reload: reloadFiles } = useQuery(
+    () => service.files.list({ sort: 'fileBarcode', direction: 'desc', pageSize: 200 }),
+    [],
+    EMPTY_FILES,
   );
 
+  const [draft, setDraft] = useState<FileCreateInput>(emptyForm);
+  /** Set once the operator types a barcode of their own; null means "follow the registry". */
+  const [barcodeOverride, setBarcodeOverride] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [createdId, setCreatedId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const set = <K extends keyof FileCreateInput>(key: K, value: FileCreateInput[K]) =>
+    setDraft((current) => ({ ...current, [key]: value }));
+
+  // The next free barcode follows the registry until the operator overrides it,
+  // so the suggestion advances on its own once the first load (or the reload
+  // after a create) answers.
+  const suggestedBarcode = useMemo(() => nextFileBarcode(recent.items), [recent]);
+  const form: FileCreateInput = { ...draft, fileBarcode: barcodeOverride ?? suggestedBarcode };
+
+  // The whole location tree in one read, from which both shelf lists are derived.
+  const { data: shelfPaths } = useQuery(() => loadShelfPaths(service), [], [] as ShelfPath[]);
+  const { data: areas } = useQuery(() => service.locations.areas(), [], [] as Area[]);
+
+  const shelfOptions = useMemo(
+    () => shelfPaths.filter((path) => path.status === 'Active'),
+    [shelfPaths],
+  );
   const blockedShelves = useMemo(
-    () =>
-      db.rooms.flatMap((room) =>
-        room.storageUnits.flatMap((unit) =>
-          unit.shelves
-            .filter((shelf) => shelf.status !== 'Active')
-            .map((shelf) => ({
-              id: shelf.id,
-              label: `${room.code} / ${unit.code} / ${shelf.code}`,
-              status: shelf.status,
-            })),
-        ),
-      ),
-    [db.rooms],
+    () => shelfPaths.filter((path) => path.status !== 'Active'),
+    [shelfPaths],
   );
 
   // Live validation mirrors the service, so the operator sees the same verdict
-  // before pressing the button.
-  const issues = form.fileBarcode.trim() || form.shelfId ? service.files.validateCreate(form) : [];
+  // before pressing the button. It costs a round trip, so it stays off until
+  // there is something worth checking.
+  const { data: issues } = useQuery(
+    () =>
+      form.fileBarcode.trim() || form.shelfId
+        ? service.files.validateCreate(form)
+        : Promise.resolve([]),
+    [
+      form.fileBarcode,
+      form.subject,
+      form.department,
+      form.year,
+      form.shelfId,
+      form.position,
+      form.area,
+      form.pincode,
+    ],
+    [],
+  );
   const errorsFor = (field: string) =>
     issues.find((i) => i.field === field && i.severity === 'error')?.message;
   const warningFor = (field: string) =>
@@ -111,23 +181,37 @@ export function NewFilePage() {
 
   // getpincode: resolve the pincode as soon as a known area is picked.
   const onAreaChange = (name: string) => {
-    const area = db.areas.find((item) => item.name === name);
-    setForm((current) => ({
+    const area = areas.find((item) => item.name === name);
+    setDraft((current) => ({
       ...current,
       area: name,
       pincode: area ? area.pincode : current.pincode,
     }));
   };
 
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault();
-    const result = service.files.create(form);
-    if (!result.ok) {
-      setError(result.error);
-      return;
+    setSaving(true);
+    try {
+      const result = await service.files.create(form);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setError(null);
+      setCreatedId(result.value.id);
+      // The new barcode has to be in the series before the next suggestion.
+      reloadFiles();
+    } finally {
+      setSaving(false);
     }
-    setError(null);
-    setCreatedId(result.value.id);
+  };
+
+  const resetForm = () => {
+    setDraft(emptyForm);
+    setBarcodeOverride(null);
+    setCreatedId(null);
+    reloadFiles();
   };
 
   return (
@@ -155,17 +239,7 @@ export function NewFilePage() {
               <Button variant="ghost" onClick={() => navigate(`/files/${createdId}`)}>
                 Open file
               </Button>
-              <Button
-                onClick={() => {
-                  setForm({
-                    ...emptyForm,
-                    fileBarcode: nextFileBarcode(db.files),
-                  });
-                  setCreatedId(null);
-                }}
-              >
-                Register another
-              </Button>
+              <Button onClick={resetForm}>Register another</Button>
             </div>
           </div>
         </Card>
@@ -187,7 +261,9 @@ export function NewFilePage() {
                       <TextInput
                         id="file-barcode"
                         value={form.fileBarcode}
-                        onChange={(event) => set('fileBarcode', event.target.value)}
+                        onChange={(event) => {
+                          setBarcodeOverride(event.target.value);
+                        }}
                         className="font-mono"
                         invalid={Boolean(errorsFor('fileBarcode'))}
                       />
@@ -310,7 +386,7 @@ export function NewFilePage() {
                         onChange={(event) => onAreaChange(event.target.value)}
                       >
                         <option value="">Not recorded</option>
-                        {db.areas.map((area) => (
+                        {areas.map((area) => (
                           <option key={area.id} value={area.name}>
                             {area.name} · {area.pincode}
                             {area.status !== 'Active' ? ' (inactive)' : ''}
@@ -375,7 +451,7 @@ export function NewFilePage() {
                     <p className="muted mt-1 text-xs leading-6">
                       {blockedShelves
                         .slice(0, 4)
-                        .map((shelf) => `${shelf.label} (${shelf.status})`)
+                        .map((shelf) => `${shelf.blockedLabel} (${shelf.status})`)
                         .join(', ')}
                       {blockedShelves.length > 4 && ` and ${blockedShelves.length - 4} more`}.
                       Reopen them in the location designer before filing against them.
@@ -387,8 +463,8 @@ export function NewFilePage() {
               {error && <Flash tone="danger" text={error} onDismiss={() => setError(null)} />}
 
               <div className="flex gap-2">
-                <Button type="submit" icon={<CheckCircle size={17} />}>
-                  Create file
+                <Button type="submit" icon={<CheckCircle size={17} />} disabled={saving}>
+                  {saving ? 'Creating…' : 'Create file'}
                 </Button>
                 <Button type="button" variant="ghost" onClick={() => navigate('/files')}>
                   Cancel
@@ -424,7 +500,10 @@ export function NewFilePage() {
                 </div>
                 <div className="mt-4 rounded-xl bg-[var(--rr-bg)] p-4">
                   {form.shelfId ? (
-                    <PlacementPreview shelfId={form.shelfId} />
+                    <PlacementPreview
+                      shelfId={form.shelfId}
+                      path={shelfPaths.find((item) => item.id === form.shelfId) ?? null}
+                    />
                   ) : (
                     <p className="muted text-xs">Pick a shelf to see the retrieval path.</p>
                   )}
@@ -438,32 +517,29 @@ export function NewFilePage() {
   );
 }
 
-function PlacementPreview({ shelfId }: { shelfId: string }) {
-  const db = useDb();
+function PlacementPreview({ shelfId, path }: { shelfId: string; path: ShelfPath | null }) {
   const service = useService();
-  const shelf = service.locations.findShelf(shelfId);
-  if (!shelf) return <p className="muted text-xs">Shelf not found.</p>;
-  const unit = db.rooms
-    .flatMap((room) => room.storageUnits)
-    .find((item) => item.id === shelf.almirahId);
-  const room = db.rooms.find((item) => item.id === unit?.roomId);
-  const section = room?.sections.find((item) => item.id === unit?.sectionId);
-  const onShelf = service.files.byShelf(shelfId);
+  // The path itself came from the page's location read; only the occupancy count
+  // still needs asking for.
+  const { data: onShelf } = useQuery(
+    () => service.files.byShelf(shelfId),
+    [shelfId],
+    [] as RecordFile[],
+  );
+  if (!path) return <p className="muted text-xs">Shelf not found.</p>;
 
   return (
     <div className="space-y-3">
-      <p className="font-mono text-sm font-semibold">
-        {[room?.code, section?.code, unit?.code, shelf.code].filter(Boolean).join(' / ')}
-      </p>
+      <p className="font-mono text-sm font-semibold">{path.path}</p>
       <dl className="grid grid-cols-2 gap-2 text-xs">
         <div>
           <dt className="muted">Shelf barcode</dt>
-          <dd className="mt-0.5 font-mono font-semibold">{shelf.barcode}</dd>
+          <dd className="mt-0.5 font-mono font-semibold">{path.barcode}</dd>
         </div>
         <div>
           <dt className="muted">Occupancy</dt>
           <dd className="mt-0.5 font-semibold">
-            {shelf.occupied}/{shelf.capacity}
+            {path.occupied}/{path.capacity}
           </dd>
         </div>
         <div>
@@ -472,7 +548,7 @@ function PlacementPreview({ shelfId }: { shelfId: string }) {
         </div>
         <div>
           <dt className="muted">Status</dt>
-          <dd className="mt-0.5 font-semibold">{shelf.status}</dd>
+          <dd className="mt-0.5 font-semibold">{path.status}</dd>
         </div>
       </dl>
     </div>

@@ -97,7 +97,7 @@ function completeSignIn(user: AppUser): AppUser {
 export const authService: AuthApi = {
   demoPassword: DEMO_PASSWORD,
 
-  signIn(userName, password) {
+  async signIn(userName, password) {
     const user = findUser(userName);
     if (!user) {
       recordAttempt(userName, 'Failed', 'Web', 'Unknown user name', browserAgent());
@@ -115,7 +115,7 @@ export const authService: AuthApi = {
     return ok(completeSignIn(user));
   },
 
-  requestOtp(userName) {
+  async requestOtp(userName) {
     const user = findUser(userName);
     if (!user)
       return err('Unknown user name. Mobile login needs a registered account.', 'userName');
@@ -124,7 +124,7 @@ export const authService: AuthApi = {
     return ok({ id: challenge.id, otp: challenge.otp, expiresAt: challenge.expiresAt });
   },
 
-  signInWithOtp(userName, otp) {
+  async signInWithOtp(userName, otp) {
     const user = findUser(userName);
     if (!user) return err('Unknown user name.', 'userName');
     const challenge = otpByUser.get(user.userName.toLowerCase());
@@ -142,7 +142,7 @@ export const authService: AuthApi = {
     return ok(completeSignIn(user));
   },
 
-  signInWithPin(userName, pin) {
+  async signInWithPin(userName, pin) {
     const user = findUser(userName);
     if (!user) return err('Unknown user name.', 'userName');
     // Legacy `match_pin` compared a 4-digit employee PIN. Demo value below.
@@ -154,14 +154,14 @@ export const authService: AuthApi = {
     return ok(completeSignIn(user));
   },
 
-  requestRecovery(userName) {
+  async requestRecovery(userName) {
     const user = findUser(userName);
     if (!user) return err('Unknown user name.', 'userName');
     const challenge = issueOtp(user);
     return ok({ otp: challenge.otp });
   },
 
-  recoverPassword(userName, otp, password) {
+  async recoverPassword(userName, otp, password) {
     const user = findUser(userName);
     if (!user) return err('Unknown user name.', 'userName');
     const challenge = otpByUser.get(user.userName.toLowerCase());
@@ -196,7 +196,7 @@ export const authService: AuthApi = {
     return ok(user);
   },
 
-  signOut() {
+  async signOut() {
     const user = session.get();
     if (!user) return;
     store.update((draft) => {

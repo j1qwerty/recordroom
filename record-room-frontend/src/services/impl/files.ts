@@ -52,7 +52,7 @@ export function nextFileBarcode(existing: RecordFile[]): string {
 }
 
 export const filesService: FilesApi = {
-  list(query: FileQuery = {}) {
+  async list(query: FileQuery = {}) {
     const state = store.getState();
     const search = query.search?.trim().toLowerCase() ?? '';
     const filtered = state.files.filter((file) => {
@@ -88,25 +88,25 @@ export const filesService: FilesApi = {
     };
   },
 
-  get(id) {
+  async get(id) {
     return store.getState().files.find((file) => file.id === id) ?? null;
   },
 
-  byBarcode(barcode) {
+  async byBarcode(barcode) {
     const needle = barcode.trim().toUpperCase();
     if (!needle) return null;
     return store.getState().files.find((file) => file.fileBarcode.toUpperCase() === needle) ?? null;
   },
 
-  byShelf(shelfId) {
+  async byShelf(shelfId) {
     return store.getState().files.filter((file) => file.shelfId === shelfId);
   },
 
-  departments() {
+  async departments() {
     return [...new Set(store.getState().files.map((file) => file.department))].sort();
   },
 
-  validateCreate(input: FileCreateInput): FieldIssue[] {
+  async validateCreate(input: FileCreateInput): Promise<FieldIssue[]> {
     const issues: FieldIssue[] = [];
     const state = store.getState();
 
@@ -142,7 +142,7 @@ export const filesService: FilesApi = {
     }
 
     // checkShelfBarcode: the shelf must exist and be usable.
-    const shelf = locationsService.findShelf(input.shelfId);
+    const shelf = await locationsService.findShelf(input.shelfId);
     if (!shelf) {
       issues.push({ field: 'shelfId', message: 'Select a shelf.', severity: 'error' });
     } else if (shelf.status !== 'Active') {
@@ -189,8 +189,8 @@ export const filesService: FilesApi = {
     return issues;
   },
 
-  create(input: FileCreateInput) {
-    const issues = filesService.validateCreate(input);
+  async create(input: FileCreateInput) {
+    const issues = await filesService.validateCreate(input);
     const blocking = issues.filter((issue) => issue.severity === 'error');
     if (blocking.length > 0) {
       return err(blocking[0].message, blocking[0].field);
@@ -198,7 +198,7 @@ export const filesService: FilesApi = {
 
     const state = store.getState();
     const fileBarcode = input.fileBarcode.trim().toUpperCase();
-    const shelf = locationsService.findShelf(input.shelfId)!;
+    const shelf = (await locationsService.findShelf(input.shelfId))!;
     const unit = state.rooms
       .flatMap((room) => room.storageUnits)
       .find((item) => item.id === shelf.almirahId);
@@ -277,15 +277,15 @@ export const filesService: FilesApi = {
     return ok(file);
   },
 
-  relocate(fileId, shelfId, position, reason) {
-    const file = filesService.get(fileId);
+  async relocate(fileId, shelfId, position, reason) {
+    const file = await filesService.get(fileId);
     if (!file) return err('File not found.', 'fileId');
     if (file.status === 'Issued') {
       return err('Return the file before changing its shelf.', 'shelfId');
     }
 
     const state = store.getState();
-    const shelf = locationsService.findShelf(shelfId);
+    const shelf = await locationsService.findShelf(shelfId);
     if (!shelf) return err('Shelf not found.', 'shelfId');
     if (shelf.status !== 'Active') {
       return err(`${shelf.code} is ${shelf.status.toLowerCase()}.`, 'shelfId');
@@ -363,8 +363,8 @@ export const filesService: FilesApi = {
     return ok(updated);
   },
 
-  remove(fileId) {
-    const file = filesService.get(fileId);
+  async remove(fileId) {
+    const file = await filesService.get(fileId);
     if (!file) return err('File not found.', 'fileId');
     if (file.status === 'Issued') {
       return err('This file is issued. Return it before deleting the registry row.', 'fileId');

@@ -14,11 +14,14 @@ import { Field, FormGrid, SelectInput, TextInput } from '../components/ui/Field'
 import { Flash, StatusBadge } from '../components/ui/Flash';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Pagination } from '../components/ui/Pagination';
-import { useService, useSession } from '../hooks/useService';
+import { useQuery, useService, useSession } from '../hooks/useService';
+import type { Page } from '../services/contracts';
 import type { Employee, EmployeeStatus, Role } from '../types';
 
 const STATUSES: Array<EmployeeStatus | 'All'> = ['All', 'Active', 'Inactive', 'Retired'];
 const ROLES: Role[] = ['Admin', 'Supervisor', 'Operator', 'Employee'];
+
+const EMPTY: Page<Employee> = { items: [], total: 0, page: 1, pageSize: 10 };
 
 type FormValue = Omit<Employee, 'id' | 'createdAt' | 'modifiedAt' | 'status'> & {
   status: EmployeeStatus;
@@ -43,8 +46,18 @@ export function EmployeesPage() {
   const [creating, setCreating] = useState(false);
   const [flash, setFlash] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
-  const result = service.employees.list({ search, department, status, page, pageSize });
-  const departments = service.employees.departments();
+  // The API filters, sorts and pages the registry, so every control above is a
+  // request parameter rather than a client-side predicate.
+  const {
+    data: result,
+    loading,
+    reload,
+  } = useQuery(
+    () => service.employees.list({ search, department, status, page, pageSize }),
+    [search, department, status, page, pageSize],
+    EMPTY,
+  );
+  const { data: departments } = useQuery(() => service.employees.departments(), [], [] as string[]);
 
   const patch = (next: {
     search?: string;
@@ -57,13 +70,14 @@ export function EmployeesPage() {
     setPage(1);
   };
 
-  const remove = (employee: Employee) => {
-    const outcome = service.employees.remove(employee.id);
+  const remove = async (employee: Employee) => {
+    const outcome = await service.employees.remove(employee.id);
     setFlash(
       outcome.ok
         ? { tone: 'success', text: `${employee.employeeCode} removed.` }
         : { tone: 'danger', text: outcome.error },
     );
+    if (outcome.ok) reload();
   };
 
   return (
@@ -126,15 +140,21 @@ export function EmployeesPage() {
         {result.items.length === 0 ? (
           <div className="p-6">
             <EmptyState
-              title="No employees match"
-              description="Clear the filters or add a new employee record."
+              title={loading ? 'Loading employees' : 'No employees match'}
+              description={
+                loading
+                  ? 'Asking the employee registry for the matching rows.'
+                  : 'Clear the filters or add a new employee record.'
+              }
               action={
-                <Button
-                  variant="ghost"
-                  onClick={() => patch({ search: '', department: 'All', status: 'All' })}
-                >
-                  Clear filters
-                </Button>
+                loading ? undefined : (
+                  <Button
+                    variant="ghost"
+                    onClick={() => patch({ search: '', department: 'All', status: 'All' })}
+                  >
+                    Clear filters
+                  </Button>
+                )
               }
             />
           </div>
@@ -214,14 +234,15 @@ export function EmployeesPage() {
 
       <Modal open={creating} onClose={() => setCreating(false)} title="Add employee">
         <EmployeeForm
-          onSubmit={(value) => {
-            const outcome = service.employees.create(value);
+          onSubmit={async (value) => {
+            const outcome = await service.employees.create(value);
             if (!outcome.ok) {
               setFlash({ tone: 'danger', text: outcome.error });
               return;
             }
             setCreating(false);
             setFlash({ tone: 'success', text: `${outcome.value.employeeCode} registered.` });
+            reload();
           }}
         />
       </Modal>
@@ -230,14 +251,15 @@ export function EmployeesPage() {
         {editing && (
           <EmployeeForm
             initial={editing}
-            onSubmit={(value) => {
-              const outcome = service.employees.update(editing.id, value);
+            onSubmit={async (value) => {
+              const outcome = await service.employees.update(editing.id, value);
               if (!outcome.ok) {
                 setFlash({ tone: 'danger', text: outcome.error });
                 return;
               }
               setEditing(null);
               setFlash({ tone: 'success', text: `${outcome.value.employeeCode} updated.` });
+              reload();
             }}
           />
         )}

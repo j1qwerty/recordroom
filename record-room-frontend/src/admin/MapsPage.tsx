@@ -8,7 +8,8 @@ import { Badge } from '../components/ui/Badge';
 import { Field, TextInput } from '../components/ui/Field';
 import { Flash, StatusBadge } from '../components/ui/Flash';
 import { EmptyState } from '../components/ui/EmptyState';
-import { useService } from '../hooks/useService';
+import { useQuery, useService } from '../hooks/useService';
+import type { MapUpload, RecordFile } from '../types';
 
 /**
  * `upload_map` â€” scanned maps and file copies.
@@ -25,18 +26,32 @@ export function MapsPage() {
   const [adding, setAdding] = useState(false);
   const [flash, setFlash] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
-  const rows = service.uploads.maps({ search });
-  const grouped = service.files
-    .list({ pageSize: 200 })
-    .items.filter((file) => file.fileType === 'Map' || file.fileType === 'Drawing');
+  // The API owns the filter, so re-running on every keystroke matches what the
+  // old synchronous search did.
+  const {
+    data: rows,
+    loading,
+    reload,
+  } = useQuery(() => service.uploads.maps({ search }), [search], [] as MapUpload[]);
+  // Registry rows a map can hang off. Derived once and kept in the query so the
+  // datalist does not refetch while typing in the form.
+  const { data: grouped } = useQuery(
+    async () => {
+      const result = await service.files.list({ pageSize: 200 });
+      return result.items.filter((file) => file.fileType === 'Map' || file.fileType === 'Drawing');
+    },
+    [],
+    [] as RecordFile[],
+  );
 
-  const remove = (id: string) => {
-    const result = service.uploads.removeMap(id);
+  const remove = async (id: string) => {
+    const result = await service.uploads.removeMap(id);
     setFlash(
       result.ok
         ? { tone: 'success', text: 'Map page removed.' }
         : { tone: 'danger', text: result.error },
     );
+    if (result.ok) reload();
   };
 
   return (
@@ -74,9 +89,15 @@ export function MapsPage() {
         {rows.length === 0 ? (
           <div className="p-6">
             <EmptyState
-              title="No map uploads"
-              description="Add a scanned map page to attach it to a registry row."
-              action={<Button onClick={() => setAdding(true)}>Add map page</Button>}
+              title={loading ? 'Loading map uploads' : 'No map uploads'}
+              description={
+                loading
+                  ? 'Asking for the stored map pages.'
+                  : 'Add a scanned map page to attach it to a registry row.'
+              }
+              action={
+                loading ? undefined : <Button onClick={() => setAdding(true)}>Add map page</Button>
+              }
             />
           </div>
         ) : (
@@ -142,8 +163,8 @@ export function MapsPage() {
             barcode: file.fileBarcode,
             label: `${file.fileBarcode} Â· ${file.subject}`,
           }))}
-          onSubmit={(input) => {
-            const result = service.uploads.addMap(input);
+          onSubmit={async (input) => {
+            const result = await service.uploads.addMap(input);
             if (!result.ok) {
               setFlash({ tone: 'danger', text: result.error });
               return;
@@ -153,6 +174,7 @@ export function MapsPage() {
               tone: 'success',
               text: `${result.value.filename} stored as version ${result.value.version}.`,
             });
+            reload();
           }}
         />
       </Modal>

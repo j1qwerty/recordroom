@@ -16,8 +16,11 @@ import { Badge } from '../components/ui/Badge';
 import { Field, FormGrid, SelectInput, TextInput } from '../components/ui/Field';
 import { Flash } from '../components/ui/Flash';
 import { EmptyState } from '../components/ui/EmptyState';
-import { useService, useSession } from '../hooks/useService';
-import type { RecordFile } from '../types';
+import { useQuery, useService, useSession } from '../hooks/useService';
+import type { Employee, RecordFile } from '../types';
+import type { BorrowerRow, Page } from '../services/contracts';
+
+const EMPTY_EMPLOYEES: Page<Employee> = { items: [], total: 0, page: 1, pageSize: 100 };
 
 /**
  * Scanner-first multi-file issue desk.
@@ -40,53 +43,89 @@ export function IssuePage() {
   const [remark, setRemark] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [committing, setCommitting] = useState(false);
 
-  const employees = service.employees.list({ pageSize: 100, status: 'Active' }).items;
+  // Employees and the borrower roll-up both live in the API now, so they are
+  // asked for rather than derived from a local snapshot.
+  const { data: employeePage } = useQuery(
+    () => service.employees.list({ pageSize: 100, status: 'Active' }),
+    [],
+    EMPTY_EMPLOYEES,
+  );
+  const employees = employeePage.items;
   const employee = employees.find((item) => item.employeeCode === employeeCode);
 
-  const addScan = (raw: string) => {
+  const { data: nextReceipt, reload: reloadReceipt } = useQuery(
+    () => service.issues.nextReceiptNumber(),
+    [],
+    '…',
+  );
+  const { data: borrowers, reload: reloadBorrowers } = useQuery(
+    () => service.issues.borrowers(),
+    [],
+    [] as BorrowerRow[],
+  );
+
+  // A scan is two round trips (exact barcode, then the search fallback), so it
+  // is held while in flight; a USB scanner can fire faster than the API answers.
+  const addScan = async (raw: string) => {
     const value = raw.trim();
     if (!value) return;
-    const file =
-      service.files.byBarcode(value) ?? service.files.list({ search: value, pageSize: 1 }).items[0];
-    if (!file) {
-      setError(`Nothing in the registry matches "${value}".`);
-      return;
+    setScanning(true);
+    try {
+      const exact = await service.files.byBarcode(value);
+      const fallback = exact ? null : await service.files.list({ search: value, pageSize: 1 });
+      const file = exact ?? fallback?.items[0];
+      if (!file) {
+        setError(`Nothing in the registry matches "${value}".`);
+        return;
+      }
+      if (cart.some((item) => item.id === file.id)) {
+        setError(`${file.fileBarcode} is already on this receipt.`);
+        return;
+      }
+      if (file.status !== 'Available') {
+        setError(`${file.fileBarcode} is ${file.status.toLowerCase()} and cannot be issued.`);
+        return;
+      }
+      setError(null);
+      setCart((current) => [...current, file]);
+      setScan('');
+    } finally {
+      setScanning(false);
     }
-    if (cart.some((item) => item.id === file.id)) {
-      setError(`${file.fileBarcode} is already on this receipt.`);
-      return;
-    }
-    if (file.status !== 'Available') {
-      setError(`${file.fileBarcode} is ${file.status.toLowerCase()} and cannot be issued.`);
-      return;
-    }
-    setError(null);
-    setCart((current) => [...current, file]);
-    setScan('');
   };
 
-  const commit = () => {
-    const result = service.issues.issueFiles({
-      borrowerType,
-      borrowerEmployeeCode: borrowerType === 'Employee' ? employeeCode : depositorCode,
-      borrowerName:
-        borrowerType === 'Employee' ? (employee?.name ?? '') : 'Court advocate (walk-in)',
-      department: borrowerType === 'Employee' ? (employee?.department ?? '') : 'Legal',
-      purpose,
-      fileIds: cart.map((file) => file.id),
-      dueAt,
-      remark,
-    });
-    if (!result.ok) {
-      setError(result.error);
-      return;
+  const commit = async () => {
+    setCommitting(true);
+    try {
+      const result = await service.issues.issueFiles({
+        borrowerType,
+        borrowerEmployeeCode: borrowerType === 'Employee' ? employeeCode : depositorCode,
+        borrowerName:
+          borrowerType === 'Employee' ? (employee?.name ?? '') : 'Court advocate (walk-in)',
+        department: borrowerType === 'Employee' ? (employee?.department ?? '') : 'Legal',
+        purpose,
+        fileIds: cart.map((file) => file.id),
+        dueAt,
+        remark,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setReceipt(result.value.receiptNumber);
+      setError(null);
+      setCart([]);
+      setPurpose('');
+      setRemark('');
+      // The written receipt moves the borrower list and the receipt series on.
+      reloadReceipt();
+      reloadBorrowers();
+    } finally {
+      setCommitting(false);
     }
-    setReceipt(result.value.receiptNumber);
-    setError(null);
-    setCart([]);
-    setPurpose('');
-    setRemark('');
   };
 
   const reset = () => {
@@ -146,7 +185,7 @@ export function IssuePage() {
               className="mt-5 relative"
               onSubmit={(event) => {
                 event.preventDefault();
-                addScan(scan);
+                void addScan(scan);
               }}
             >
               <MagnifyingGlass
@@ -213,7 +252,7 @@ export function IssuePage() {
               <p className="text-sm font-semibold">2. Borrower and terms</p>
               <p className="muted mt-1 text-xs">
                 {cart.length} file(s) ready · next receipt{' '}
-                <span className="font-mono">{service.issues.nextReceiptNumber()}</span>
+                <span className="font-mono">{nextReceipt}</span>
               </p>
             </div>
             <ClipboardText size={22} className="text-accent" />
@@ -301,11 +340,11 @@ export function IssuePage() {
             <div className="flex flex-wrap gap-2">
               <Button
                 className="flex-1"
-                disabled={!allowed('issue.issue') || cart.length === 0}
+                disabled={!allowed('issue.issue') || cart.length === 0 || scanning || committing}
                 icon={<CheckCircle size={17} />}
-                onClick={commit}
+                onClick={() => void commit()}
               >
-                Confirm issue
+                {committing ? 'Committing…' : 'Confirm issue'}
               </Button>
               <Button variant="ghost" onClick={() => setCart([])} icon={<Plus size={17} />}>
                 Clear list
@@ -327,15 +366,12 @@ export function IssuePage() {
         </Card>
       </div>
 
-      <BorrowerPanel />
+      <BorrowerPanel rows={borrowers} />
     </div>
   );
 }
 
-function BorrowerPanel() {
-  const service = useService();
-  const rows = service.issues.borrowers();
-
+function BorrowerPanel({ rows }: { rows: BorrowerRow[] }) {
   return (
     <Card padding={false} className="overflow-hidden">
       <div className="border-b border-base p-5">

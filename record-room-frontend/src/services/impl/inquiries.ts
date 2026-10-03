@@ -8,7 +8,7 @@
  * `/api/media-assets`, this file becomes the HTTP adapter and the pages stay
  * unchanged.
  *
- * Note: no admin panel for inquiry data is added here â€” `AGENTS.md` requires
+ * Note: no admin panel for inquiry data is added here Ã¢â‚¬â€ `AGENTS.md` requires
  * asking before introducing one.
  */
 
@@ -53,7 +53,7 @@ export function isSafeHttpUrl(value: string): boolean {
 }
 
 export const inquiriesService = {
-  save(payload: InquiryPayload) {
+  async save(payload: InquiryPayload) {
     if (!payload.name.trim()) return err('Name is required.', 'name');
     if (!payload.email.trim() || !payload.email.includes('@')) {
       return err('Enter a valid email address.', 'email');
@@ -78,7 +78,7 @@ export const inquiriesService = {
         action: 'Create',
         entity: 'Inquiry',
         entityId: record.id,
-        before: 'â€”',
+        before: 'Ã¢â‚¬â€',
         after: `${record.department || 'unassigned'}`,
         summary: `Inquiry submitted by ${record.name}`,
       });
@@ -86,11 +86,11 @@ export const inquiriesService = {
     return ok(record);
   },
 
-  list(): InquiryRecord[] {
+  async list(): Promise<InquiryRecord[]> {
     return store.getState().inquiries;
   },
 
-  remove(id: string) {
+  async remove(id: string) {
     const record = store.getState().inquiries.find((item) => item.id === id);
     if (!record) return err('Inquiry not found.', 'id');
     store.update((draft) => {
@@ -107,13 +107,13 @@ export const inquiriesService = {
     return ok(true as const);
   },
 
-  submittedBy(): string {
+  async submittedBy(): Promise<string> {
     return session.userName();
   },
 };
 
 export const mediaService = {
-  saveLink(payload: MediaLinkPayload) {
+  async saveLink(payload: MediaLinkPayload) {
     if (!payload.title.trim()) return err('Title is required.', 'title');
     if (!payload.alt.trim()) return err('Alt text is required.', 'alt');
     if (!isSafeHttpUrl(payload.url)) {
@@ -135,7 +135,7 @@ export const mediaService = {
         action: 'Create',
         entity: 'MediaLink',
         entityId: record.id,
-        before: 'â€”',
+        before: 'Ã¢â‚¬â€',
         after: record.url,
         summary: `Media link "${record.title}" stored`,
       });
@@ -143,11 +143,11 @@ export const mediaService = {
     return ok(record);
   },
 
-  list(): MediaLinkRecord[] {
+  async list(): Promise<MediaLinkRecord[]> {
     return store.getState().mediaLinks;
   },
 
-  remove(id: string) {
+  async remove(id: string) {
     const record = store.getState().mediaLinks.find((item) => item.id === id);
     if (!record) return err('Media link not found.', 'id');
     store.update((draft) => {

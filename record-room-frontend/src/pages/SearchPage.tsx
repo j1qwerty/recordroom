@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { ArrowRight, Funnel, MagnifyingGlass, MapPin, Sparkle } from '@phosphor-icons/react';
-import { useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -9,8 +8,9 @@ import { EmptyState } from '../components/ui/EmptyState';
 import { StatusBadge } from '../components/ui/Flash';
 import { PageHeader } from '../components/ui/PageHeader';
 import { DecorativeField } from '../components/DecorativeField';
-import { useService } from '../hooks/useService';
-import type { FileStatus } from '../types';
+import { useQuery, useService } from '../hooks/useService';
+import type { FileStatus, RecordFile } from '../types';
+import type { Page } from '../services/contracts';
 
 const STATUSES: Array<FileStatus | 'All'> = [
   'All',
@@ -21,12 +21,16 @@ const STATUSES: Array<FileStatus | 'All'> = [
   'Archived',
 ];
 
+const EMPTY: Page<RecordFile> = { items: [], total: 0, page: 1, pageSize: 50 };
+
 /**
  * Global search across the registry.
  *
  * The previous version filtered the mock array inline. This one goes through
  * `filesService.list`, the same query the registry page and the future
  * `GET /api/files` endpoint will use, so the filter semantics cannot drift.
+ * That call is async now, so the page renders a loading state and then whatever
+ * the service returns for the current text and filters.
  */
 export function SearchPage() {
   const service = useService();
@@ -37,11 +41,14 @@ export function SearchPage() {
   const [department, setDepartment] = useState('All');
   const [ai, setAi] = useState(false);
 
-  const result = useMemo(
+  // One request per filter change: the service owns matching, so re-running the
+  // call is what keeps the results honest rather than filtering rows in the DOM.
+  const { data: result, loading } = useQuery(
     () => service.files.list({ search: query, status, department, pageSize: 50 }),
-    [service, query, status, department],
+    [query, status, department],
+    EMPTY,
   );
-  const departments = service.files.departments();
+  const { data: departments } = useQuery(() => service.files.departments(), [], [] as string[]);
 
   return (
     <div className="space-y-6">
@@ -127,19 +134,25 @@ export function SearchPage() {
 
       {result.items.length === 0 ? (
         <EmptyState
-          title="Nothing matched that search"
-          description="Try a barcode prefix, a file number, a department, or clear the filters."
+          title={loading ? 'Searching the registry' : 'Nothing matched that search'}
+          description={
+            loading
+              ? 'Asking the registry for rows that match the current search.'
+              : 'Try a barcode prefix, a file number, a department, or clear the filters.'
+          }
           action={
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setQuery('');
-                setStatus('All');
-                setDepartment('All');
-              }}
-            >
-              Clear search
-            </Button>
+            loading ? undefined : (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setQuery('');
+                  setStatus('All');
+                  setDepartment('All');
+                }}
+              >
+                Clear search
+              </Button>
+            )
           }
         />
       ) : (

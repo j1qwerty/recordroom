@@ -8,11 +8,14 @@ import { Modal } from '../components/ui/Modal';
 import { Field, SelectInput, TextInput } from '../components/ui/Field';
 import { Flash, StatusBadge } from '../components/ui/Flash';
 import { EmptyState } from '../components/ui/EmptyState';
-import { useService, useSession } from '../hooks/useService';
+import { useQuery, useService, useSession } from '../hooks/useService';
 import { ROLE_DESCRIPTIONS } from '../services/permissions';
 import { PERMISSIONS } from '../services/permissions';
 import { can } from '../services/permissions';
-import type { Role } from '../types';
+import type { Page } from '../services/contracts';
+import type { AppUser, Employee, Role } from '../types';
+
+const EMPTY: Page<Employee> = { items: [], total: 0, page: 1, pageSize: 100 };
 
 /**
  * `drm_login` administration with the permission matrix shown inline, so an
@@ -22,29 +25,41 @@ export function UsersPage() {
   const service = useService();
   const { allowed } = useSession();
 
-  const users = service.users.list();
-  const employees = service.employees.list({ pageSize: 100 }).items;
-  const roles = service.users.roles();
-
   const [editing, setEditing] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [flash, setFlash] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
+  // Three independent reads: the login table, the employee master it links to,
+  // and the role list the permission matrix is drawn from.
+  const {
+    data: users,
+    loading,
+    reload,
+  } = useQuery(() => service.users.list(), [], [] as AppUser[]);
+  const { data: employeePage } = useQuery(
+    () => service.employees.list({ pageSize: 100 }),
+    [],
+    EMPTY,
+  );
+  const { data: roles } = useQuery(() => service.users.roles(), [], [] as Role[]);
+
+  const employees = employeePage.items;
   const target = users.find((user) => user.id === editing) ?? null;
 
-  const remove = (id: string) => {
-    const result = service.users.remove(id);
+  const remove = async (id: string) => {
+    const result = await service.users.remove(id);
     setFlash(
       result.ok
         ? { tone: 'success', text: 'Login removed.' }
         : { tone: 'danger', text: result.error },
     );
+    if (result.ok) reload();
   };
 
-  const toggleActive = (id: string) => {
+  const toggleActive = async (id: string) => {
     const user = users.find((item) => item.id === id);
     if (!user) return;
-    const result = service.users.update(id, { active: !user.active });
+    const result = await service.users.update(id, { active: !user.active });
     setFlash(
       result.ok
         ? {
@@ -53,6 +68,7 @@ export function UsersPage() {
           }
         : { tone: 'danger', text: result.error },
     );
+    if (result.ok) reload();
   };
 
   return (
@@ -75,7 +91,12 @@ export function UsersPage() {
       <Card padding={false} className="overflow-hidden">
         {users.length === 0 ? (
           <div className="p-6">
-            <EmptyState title="No logins" description="Add a login to give someone access." />
+            <EmptyState
+              title={loading ? 'Loading logins' : 'No logins'}
+              description={
+                loading ? 'Asking for the login table.' : 'Add a login to give someone access.'
+              }
+            />
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -196,14 +217,15 @@ export function UsersPage() {
         <UserForm
           employees={employees.map((item) => ({ code: item.employeeCode, name: item.name }))}
           roles={roles}
-          onSubmit={(input) => {
-            const result = service.users.create(input);
+          onSubmit={async (input) => {
+            const result = await service.users.create(input);
             if (!result.ok) {
               setFlash({ tone: 'danger', text: result.error });
               return;
             }
             setCreating(false);
             setFlash({ tone: 'success', text: `Login created for ${result.value.displayName}.` });
+            reload();
           }}
         />
       </Modal>
@@ -217,17 +239,21 @@ export function UsersPage() {
               role: target.role,
               employeeCode: target.employeeCode ?? '',
               active: target.active,
+              password: '',
             }}
             employees={employees.map((item) => ({ code: item.employeeCode, name: item.name }))}
             roles={roles}
-            onSubmit={(input) => {
-              const result = service.users.update(target.id, input);
+            onSubmit={async ({ password, ...input }) => {
+              // An existing login keeps its password; the API ignores it on update.
+              void password;
+              const result = await service.users.update(target.id, input);
               if (!result.ok) {
                 setFlash({ tone: 'danger', text: result.error });
                 return;
               }
               setEditing(null);
               setFlash({ tone: 'success', text: `${result.value.displayName} updated.` });
+              reload();
             }}
           />
         )}
@@ -242,6 +268,8 @@ interface UserFormValue {
   role: Role;
   employeeCode: string;
   active: boolean;
+  /** Write-only. Only sent when creating a login; never returned by the API. */
+  password: string;
 }
 
 function UserForm({
@@ -256,8 +284,20 @@ function UserForm({
   onSubmit: (value: UserFormValue) => void;
 }) {
   const [value, setValue] = useState<UserFormValue>(
-    initial ?? { userName: '', displayName: '', role: 'Operator', employeeCode: '', active: true },
+    initial
+      ? { ...initial, password: '' }
+      : {
+          userName: '',
+          displayName: '',
+          role: 'Operator',
+          employeeCode: '',
+          active: true,
+          password: '',
+        },
   );
+
+  // An existing login already has a password; only a new one needs one.
+  const needsPassword = !initial;
 
   return (
     <form
@@ -318,6 +358,22 @@ function UserForm({
           ))}
         </SelectInput>
       </Field>
+      {needsPassword && (
+        <Field
+          label="Initial password"
+          htmlFor="user-password"
+          required
+          hint="Write-only. Sent once on create and never returned by the API."
+        >
+          <TextInput
+            id="user-password"
+            type="password"
+            value={value.password}
+            onChange={(event) => setValue((v) => ({ ...v, password: event.target.value }))}
+            className="font-mono"
+          />
+        </Field>
+      )}
       <label className="flex items-center gap-2 text-sm">
         <input
           type="checkbox"

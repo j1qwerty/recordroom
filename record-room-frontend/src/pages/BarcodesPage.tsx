@@ -7,9 +7,22 @@ import { Badge } from '../components/ui/Badge';
 import { Field, SelectInput, TextInput } from '../components/ui/Field';
 import { Flash } from '../components/ui/Flash';
 import { BarcodeSymbol } from '../components/BarcodeSymbol';
-import { useService } from '../hooks/useService';
+import { useQuery, useService } from '../hooks/useService';
 import { buildQrPayload } from '../lib/barcode';
-import type { BarcodeSubject } from '../types';
+import type { Area, BarcodeJob, BarcodePayload, BarcodeSubject, RecordFile, Room } from '../types';
+import type { Page } from '../services/contracts';
+
+const EMPTY_ROOMS: Room[] = [];
+const EMPTY_AREAS: Area[] = [];
+const EMPTY_FILES: Page<RecordFile> = { items: [], total: 0, page: 1, pageSize: 200 };
+const EMPTY_SUBJECTS: BarcodeSubject[] = [];
+const EMPTY_PAYLOADS: BarcodePayload | null = null;
+const EMPTY_JOBS: BarcodeJob[] = [];
+
+interface Target {
+  id: string;
+  label: string;
+}
 
 /**
  * Barcode centre.
@@ -21,19 +34,28 @@ import type { BarcodeSubject } from '../types';
  */
 export function BarcodesPage() {
   const service = useService();
-  const db = service.locations.listRooms();
 
   const [subject, setSubject] = useState<BarcodeSubject>('File');
-  const [targetId, setTargetId] = useState(db[0]?.storageUnits[0]?.shelves[0]?.id ?? '');
+  const [targetId, setTargetId] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [flash, setFlash] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
-  const targets = useMemo(() => {
-    const rooms = service.locations.listRooms();
+  // Every read on this page crosses the network now: the location tree for the
+  // non-file subjects, the registry for file subjects, and the subject list for
+  // the picker. The picker resets the target on change, so no default is seeded.
+  const { data: subjects } = useQuery(() => service.barcodes.subjects(), [], EMPTY_SUBJECTS);
+  const { data: rooms } = useQuery(() => service.locations.listRooms(), [], EMPTY_ROOMS);
+  const { data: areas } = useQuery(() => service.locations.areas(), [], EMPTY_AREAS);
+  const { data: files } = useQuery(() => service.files.list({ pageSize: 200 }), [], EMPTY_FILES);
+  const { data: jobs, reload: reloadJobs } = useQuery(
+    () => service.barcodes.jobs(),
+    [],
+    EMPTY_JOBS,
+  );
+
+  const targets: Target[] = useMemo(() => {
     if (subject === 'File')
-      return service.files
-        .list({ pageSize: 200 })
-        .items.map((f) => ({ id: f.id, label: `${f.fileBarcode} · ${f.subject}` }));
+      return files.items.map((f) => ({ id: f.id, label: `${f.fileBarcode} · ${f.subject}` }));
     if (subject === 'Shelf')
       return rooms.flatMap((room) =>
         room.storageUnits.flatMap((unit) =>
@@ -56,17 +78,18 @@ export function BarcodesPage() {
       );
     if (subject === 'Room')
       return rooms.map((room) => ({ id: room.id, label: `${room.code} · ${room.name}` }));
-    return service.locations
-      .areas()
-      .map((area) => ({ id: area.id, label: `${area.name} · ${area.pincode}` }));
-  }, [service, subject]);
+    return areas.map((area) => ({ id: area.id, label: `${area.name} · ${area.pincode}` }));
+  }, [subject, files, rooms, areas]);
 
-  const payload = targetId ? service.barcodes.payloadFor(subject, targetId) : null;
-  const jobs = service.barcodes.jobs();
+  const { data: payload } = useQuery(
+    () => service.barcodes.payloadFor(subject, targetId),
+    [subject, targetId],
+    EMPTY_PAYLOADS,
+  );
 
-  const queue = () => {
+  const queue = async () => {
     if (!targetId) return;
-    const result = service.barcodes.createJob({ subject, targetId, quantity });
+    const result = await service.barcodes.createJob({ subject, targetId, quantity });
     setFlash(
       result.ok
         ? {
@@ -75,6 +98,9 @@ export function BarcodesPage() {
           }
         : { tone: 'danger', text: result.error },
     );
+    // The queue list is a read, so a successful write has to refresh it or the
+    // new job does not appear until the page is revisited.
+    if (result.ok) reloadJobs();
   };
 
   const print = () => {
@@ -117,7 +143,7 @@ export function BarcodesPage() {
                   setTargetId('');
                 }}
               >
-                {service.barcodes.subjects.map((item) => (
+                {subjects.map((item) => (
                   <option key={item} value={item}>
                     {item}
                   </option>
@@ -153,7 +179,7 @@ export function BarcodesPage() {
 
             <Button
               className="w-full"
-              onClick={queue}
+              onClick={() => void queue()}
               disabled={!payload}
               icon={<Printer size={17} />}
             >
@@ -269,7 +295,7 @@ export function BarcodesPage() {
       </Card>
 
       <p className="muted text-xs">
-        {db.length} rooms, {service.files.list({ pageSize: 1 }).total} registry rows loaded.
+        {rooms.length} rooms, {files.total} registry rows loaded.
       </p>
     </div>
   );

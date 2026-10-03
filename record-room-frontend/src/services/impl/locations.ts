@@ -38,29 +38,31 @@ function nextRevision(draft: DbShape, roomId: string): number {
 }
 
 export const locationsService: LocationsApi = {
-  listRooms: () => store.getState().rooms,
+  async listRooms() {
+    return store.getState().rooms;
+  },
 
-  room(id) {
+  async room(id) {
     return store.getState().rooms.find((room) => room.id === id) ?? null;
   },
 
-  sectionsOf(roomId) {
-    const room = locationsService.room(roomId);
+  async sectionsOf(roomId) {
+    const room = await locationsService.room(roomId);
     return room ? room.sections : [];
   },
 
-  unitsOf(sectionId) {
+  async unitsOf(sectionId) {
     const room = store
       .getState()
       .rooms.find((item) => item.sections.some((section) => section.id === sectionId));
     return room ? room.storageUnits.filter((unit) => unit.sectionId === sectionId) : [];
   },
 
-  shelvesOf(almirahId) {
+  async shelvesOf(almirahId) {
     return findUnit(store.getState(), almirahId)?.shelves ?? [];
   },
 
-  findShelf(id) {
+  async findShelf(id) {
     for (const room of store.getState().rooms) {
       for (const unit of room.storageUnits) {
         const shelf = unit.shelves.find((row) => row.id === id);
@@ -70,7 +72,7 @@ export const locationsService: LocationsApi = {
     return null;
   },
 
-  findShelfByBarcode(barcode) {
+  async findShelfByBarcode(barcode) {
     const needle = barcode.trim().toUpperCase();
     if (!needle) return null;
     for (const room of store.getState().rooms) {
@@ -82,11 +84,11 @@ export const locationsService: LocationsApi = {
     return null;
   },
 
-  addSection(roomId, input: SectionInput) {
+  async addSection(roomId, input: SectionInput) {
     const name = input.name.trim();
     if (!name) return err('Section name is required.', 'name');
 
-    const room = locationsService.room(roomId);
+    const room = await locationsService.room(roomId);
     if (!room) return err('Room not found.', 'roomId');
     if (room.sections.some((section) => section.name.toLowerCase() === name.toLowerCase())) {
       return err(`Section "${name}" already exists in ${room.code}.`, 'name');
@@ -118,7 +120,7 @@ export const locationsService: LocationsApi = {
     return ok(section);
   },
 
-  updateSection(sectionId, input) {
+  async updateSection(sectionId, input) {
     const location = store
       .getState()
       .rooms.find((room) => room.sections.some((section) => section.id === sectionId));
@@ -174,7 +176,7 @@ export const locationsService: LocationsApi = {
     return ok(updated);
   },
 
-  deleteSection(sectionId) {
+  async deleteSection(sectionId) {
     const room = store
       .getState()
       .rooms.find((item) => item.sections.some((section) => section.id === sectionId));
@@ -202,7 +204,7 @@ export const locationsService: LocationsApi = {
     return ok(true);
   },
 
-  addAlmirah(sectionId, input: AlmirahInput) {
+  async addAlmirah(sectionId, input: AlmirahInput) {
     const room = store
       .getState()
       .rooms.find((item) => item.sections.some((section) => section.id === sectionId));
@@ -247,7 +249,7 @@ export const locationsService: LocationsApi = {
     return ok(unit);
   },
 
-  updateAlmirah(almirahId, input) {
+  async updateAlmirah(almirahId, input) {
     const draftState = store.getState();
     const unit = findUnit(draftState, almirahId);
     if (!unit) return err('Almirah not found.', 'almirahId');
@@ -287,7 +289,7 @@ export const locationsService: LocationsApi = {
     return ok(updated);
   },
 
-  deleteAlmirah(almirahId) {
+  async deleteAlmirah(almirahId) {
     const unit = findUnit(store.getState(), almirahId);
     if (!unit) return err('Almirah not found.', 'almirahId');
     const fileCount = unitFileCount(store.getState(), almirahId);
@@ -317,7 +319,7 @@ export const locationsService: LocationsApi = {
     return ok(true);
   },
 
-  addShelf(almirahId, input: ShelfInput) {
+  async addShelf(almirahId, input: ShelfInput) {
     const unit = findUnit(store.getState(), almirahId);
     if (!unit) return err('Almirah not found.', 'almirahId');
 
@@ -325,7 +327,7 @@ export const locationsService: LocationsApi = {
     const barcode = input.barcode.trim().toUpperCase();
     if (!code) return err('Shelf code is required.', 'code');
     if (!barcode) return err('Shelf barcode is required.', 'barcode');
-    if (locationsService.findShelfByBarcode(barcode)) {
+    if (await locationsService.findShelfByBarcode(barcode)) {
       return err(`Shelf barcode ${barcode} is already registered.`, 'barcode');
     }
     if (unit.shelves.some((shelf) => shelf.code.toUpperCase() === code)) {
@@ -360,12 +362,12 @@ export const locationsService: LocationsApi = {
     return ok(shelf);
   },
 
-  updateShelf(shelfId, input: Partial<ShelfInput>) {
-    const current = locationsService.findShelf(shelfId);
+  async updateShelf(shelfId, input: Partial<ShelfInput>) {
+    const current = await locationsService.findShelf(shelfId);
     if (!current) return err('Shelf not found.', 'shelfId');
 
     const barcode = input.barcode?.trim().toUpperCase() ?? current.barcode;
-    if (barcode !== current.barcode && locationsService.findShelfByBarcode(barcode)) {
+    if (barcode !== current.barcode && (await locationsService.findShelfByBarcode(barcode))) {
       return err(`Shelf barcode ${barcode} is already registered.`, 'barcode');
     }
 
@@ -395,8 +397,8 @@ export const locationsService: LocationsApi = {
     return ok(updated);
   },
 
-  deleteShelf(shelfId) {
-    const current = locationsService.findShelf(shelfId);
+  async deleteShelf(shelfId) {
+    const current = await locationsService.findShelf(shelfId);
     if (!current) return err('Shelf not found.', 'shelfId');
     const fileCount = shelfFileCount(store.getState(), shelfId);
     if (fileCount > 0) {
@@ -421,7 +423,7 @@ export const locationsService: LocationsApi = {
     return ok(true);
   },
 
-  setUnitStatus(almirahId, status) {
+  async setUnitStatus(almirahId, status) {
     const unit = findUnit(store.getState(), almirahId);
     if (!unit) return err('Almirah not found.', 'almirahId');
     if (status !== ACTIVE && unit.status === ACTIVE) {
@@ -453,8 +455,8 @@ export const locationsService: LocationsApi = {
     return ok(updated);
   },
 
-  saveLayout(roomId, note) {
-    const room = locationsService.room(roomId);
+  async saveLayout(roomId, note) {
+    const room = await locationsService.room(roomId);
     if (!room) return err('Room not found.', 'roomId');
 
     let revision = 0;
@@ -479,14 +481,14 @@ export const locationsService: LocationsApi = {
     return ok({ revision });
   },
 
-  layoutRevisions(roomId) {
+  async layoutRevisions(roomId) {
     return store
       .getState()
       .layoutRevisions.filter((revision) => revision.roomId === roomId)
       .map(({ revision, note, at, actor }) => ({ revision, note, at, actor }));
   },
 
-  occupancy() {
+  async occupancy() {
     return store.getState().rooms.map((room: Room) => ({
       room,
       sections: room.sections.map((section: Section) => {
@@ -502,5 +504,7 @@ export const locationsService: LocationsApi = {
     }));
   },
 
-  areas: () => store.getState().areas,
+  async areas() {
+    return store.getState().areas;
+  },
 };

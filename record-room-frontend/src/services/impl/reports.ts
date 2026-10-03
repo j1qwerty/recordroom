@@ -138,9 +138,13 @@ function daysLate(dueAt: string): number {
 }
 
 export const reportsService: ReportsApi = {
-  definitions,
+  async definitions() {
+    // The module-level `definitions` const is still reachable by name here:
+    // an object method name is not a binding inside its own body.
+    return definitions;
+  },
 
-  build(key: ReportKey): ReportResult {
+  async build(key: ReportKey) {
     const definition = definitions.find((item) => item.key === key);
     if (!definition) throw new Error(`Unknown report "${key}".`);
     const state = store.getState();
@@ -272,8 +276,8 @@ export const reportsService: ReportsApi = {
 };
 
 /** CSV export that also writes the export itself to the audit trail. */
-export function exportReport(key: ReportKey): ReportResult {
-  const result = reportsService.build(key);
+export async function exportReport(key: ReportKey): Promise<ReportResult> {
+  const result = await reportsService.build(key);
   const csv = toCsv(result.columns, result.rows);
   downloadCsv(`${slugify(result.definition.title)}-${result.generatedAt.slice(0, 10)}.csv`, csv);
   store.update((draft) => {

@@ -15,7 +15,7 @@ import { filesService } from './files';
 import { session } from './session';
 
 export const uploadsService: UploadsApi = {
-  maps(query = {}) {
+  async maps(query = {}) {
     const search = query.search?.trim().toLowerCase() ?? '';
     const needle = query.fileBarcode?.trim().toUpperCase();
     return store
@@ -31,8 +31,8 @@ export const uploadsService: UploadsApi = {
       .sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
   },
 
-  addMap(input) {
-    const file = filesService.byBarcode(input.fileBarcode);
+  async addMap(input) {
+    const file = await filesService.byBarcode(input.fileBarcode);
     if (!file) return err(`${input.fileBarcode} is not in the registry.`, 'fileBarcode');
     if (input.pageNo < 1) return err('Page number starts at 1.', 'pageNo');
     if (!input.filename.trim()) return err('File name is required.', 'filename');
@@ -84,7 +84,7 @@ export const uploadsService: UploadsApi = {
     return ok(row);
   },
 
-  removeMap(id) {
+  async removeMap(id) {
     const row = store.getState().maps.find((item) => item.id === id);
     if (!row) return err('Map not found.', 'id');
     store.update((draft) => {

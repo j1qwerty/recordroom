@@ -12,9 +12,12 @@ import { Badge } from '../components/ui/Badge';
 import { SelectInput, TextInput } from '../components/ui/Field';
 import { EmptyState } from '../components/ui/EmptyState';
 import { Flash } from '../components/ui/Flash';
-import { useDb, useService } from '../hooks/useService';
+import { useService, useQuery } from '../hooks/useService';
 import { formatNumber } from '../lib/utils';
-import type { MovementKind } from '../types';
+import type { MovementKind, MovementEvent, IssueRecord } from '../types';
+
+const EMPTY_MOVEMENTS: MovementEvent[] = [];
+const EMPTY_ISSUES: IssueRecord[] = [];
 
 const KINDS: Array<MovementKind | 'All'> = [
   'All',
@@ -39,17 +42,28 @@ const KIND_TONE: Record<MovementKind, 'success' | 'warning' | 'info' | 'neutral'
  * Movement log driven by the events the write services append.
  *
  * Nothing here is hardcoded: issuing a file on the issue desk or relocating one
- * from its detail page shows up here immediately.
+ * from its detail page shows up here immediately. Both reads are async, so the
+ * filters drive `useQuery` deps and the rows render once the service answers.
  */
 export function MovementPage() {
-  const db = useDb();
   const service = useService();
 
   const [search, setSearch] = useState('');
   const [kind, setKind] = useState<MovementKind | 'All'>('All');
 
-  const rows = service.movements.list({ search, kind, limit: 200 });
-  const overdue = service.issues.overdue();
+  const { data: rows, loading } = useQuery(
+    () => service.movements.list({ search, kind, limit: 200 }),
+    [search, kind],
+    EMPTY_MOVEMENTS,
+  );
+  // Overdue receipts and the unfiltered total do not depend on the filters above,
+  // so they are asked for once rather than on every keystroke.
+  const { data: overdue } = useQuery(() => service.issues.overdue(), [], EMPTY_ISSUES);
+  const { data: allEvents } = useQuery(
+    () => service.movements.list({ limit: 10_000 }),
+    [],
+    EMPTY_MOVEMENTS,
+  );
   const todayCount = rows.filter(
     (row) => row.at.slice(0, 10) === new Date().toISOString().slice(0, 10),
   ).length;
@@ -115,8 +129,12 @@ export function MovementPage() {
         {rows.length === 0 ? (
           <div className="p-6">
             <EmptyState
-              title="No movement events match"
-              description="Clear the filters, or issue a file from the issue desk to see a new event appear here."
+              title={loading ? 'Loading movement events' : 'No movement events match'}
+              description={
+                loading
+                  ? 'Asking the registry for the events that match these filters.'
+                  : 'Clear the filters, or issue a file from the issue desk to see a new event appear here.'
+              }
             />
           </div>
         ) : (
@@ -165,7 +183,7 @@ export function MovementPage() {
           <p className="text-sm font-semibold">How this log is produced</p>
         </div>
         <p className="muted text-sm leading-6">
-          {db.movements.length} events exist in the local dataset. Every issue, return, relocation,
+          {allEvents.length} events exist in the local dataset. Every issue, return, relocation,
           file creation and digitization release appends one row inside the same write that changes
           the record, so the log cannot disagree with the registry. The full history for 25 lakh
           files belongs in the API with server-side pagination.

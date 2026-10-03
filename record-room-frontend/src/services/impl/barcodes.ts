@@ -24,11 +24,11 @@ function findUnit(almirahId: string) {
   return undefined;
 }
 
-function locate(targetId: string): BarcodePayload | null {
-  const file = filesService.get(targetId);
+async function locate(targetId: string): Promise<BarcodePayload | null> {
+  const file = await filesService.get(targetId);
   if (file) return buildPayload('File', file.fileBarcode, file.fileNumber);
 
-  const shelf = locationsService.findShelf(targetId);
+  const shelf = await locationsService.findShelf(targetId);
   if (shelf) return buildPayload('Shelf', shelf.barcode, shelf.code);
 
   const unit = findUnit(targetId);
@@ -50,22 +50,26 @@ function locate(targetId: string): BarcodePayload | null {
 }
 
 export const barcodesService: BarcodeApi = {
-  subjects: SUBJECTS,
+  async subjects() {
+    return [...SUBJECTS];
+  },
 
-  payloadFor(subject, id) {
-    const payload = locate(id);
+  async payloadFor(subject, id) {
+    const payload = await locate(id);
     if (!payload) return null;
     return payload.subject === subject ? payload : null;
   },
 
-  validate: (raw) => parseScan(raw),
+  async validate(raw) {
+    return parseScan(raw);
+  },
 
-  jobs() {
+  async jobs() {
     return [...store.getState().barcodeJobs].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   },
 
-  createJob(input) {
-    const payload = locate(input.targetId);
+  async createJob(input) {
+    const payload = await locate(input.targetId);
     if (!payload) return err('Nothing to label for that target.', 'targetId');
     if (payload.subject !== input.subject) {
       return err(
@@ -105,7 +109,7 @@ export const barcodesService: BarcodeApi = {
     return ok(job);
   },
 
-  cancelJob(id) {
+  async cancelJob(id) {
     const job = store.getState().barcodeJobs.find((item) => item.id === id);
     if (!job) return err('Print job not found.', 'id');
     if (job.status === 'Printed')

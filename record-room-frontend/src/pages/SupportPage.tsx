@@ -5,7 +5,8 @@ import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Field, FormGrid, TextArea } from '../components/ui/Field';
 import { Flash } from '../components/ui/Flash';
-import { useService } from '../hooks/useService';
+import { useQuery, useService } from '../hooks/useService';
+import type { InquiryRecord } from '../services/impl/inquiries';
 
 /**
  * Support and inquiry.
@@ -19,9 +20,15 @@ export function SupportPage() {
   const [form, setForm] = useState({ name: '', email: '', department: '', message: '' });
   const [flash, setFlash] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
-  const submit = (event: FormEvent) => {
+  const { data: submitted, reload } = useQuery(
+    () => service.inquiries.list(),
+    [],
+    [] as InquiryRecord[],
+  );
+
+  const submit = async (event: FormEvent) => {
     event.preventDefault();
-    const result = service.inquiries.save(form);
+    const result = await service.inquiries.save(form);
     if (!result.ok) {
       setFlash({ tone: 'danger', text: result.error });
       return;
@@ -31,9 +38,9 @@ export function SupportPage() {
       text: `Inquiry saved locally at ${result.value.createdAt}. It will not survive a dataset reset.`,
     });
     setForm({ name: '', email: '', department: '', message: '' });
+    // The "submitted in this session" list is a query result, not local state.
+    reload();
   };
-
-  const submitted = service.inquiries.list();
 
   return (
     <div className="relative space-y-7">

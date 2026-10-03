@@ -30,7 +30,7 @@ function batchStatus(pages: DigitizationPage[], submitted: boolean): BatchStatus
 }
 
 export const digitizationService: DigitizationApi = {
-  batches(query: DigitizationQuery = {}) {
+  async batches(query: DigitizationQuery = {}) {
     const search = query.search?.trim().toLowerCase() ?? '';
     const rows = store.getState().batches.filter((batch) => {
       if (query.employeeCode && batch.employeeCode !== query.employeeCode) return false;
@@ -46,12 +46,12 @@ export const digitizationService: DigitizationApi = {
     return rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   },
 
-  batch(id) {
+  async batch(id) {
     return store.getState().batches.find((batch) => batch.id === id) ?? null;
   },
 
-  createBatch(input) {
-    const employee = employeesService.byCode(input.employeeCode);
+  async createBatch(input) {
+    const employee = await employeesService.byCode(input.employeeCode);
     if (!employee) return err('Select a registered employee.', 'employeeCode');
     if (employee.status !== 'Active') {
       return err(
@@ -107,12 +107,12 @@ export const digitizationService: DigitizationApi = {
     return `uploads/${batch.employeeCode}/${batch.folder}/`;
   },
 
-  uploadPage(batchId, input) {
-    const batch = digitizationService.batch(batchId);
+  async uploadPage(batchId, input) {
+    const batch = await digitizationService.batch(batchId);
     if (!batch) return err('Batch not found.', 'batchId');
     if (batch.status === 'Approved') return err('Approved batches are read-only.', 'batchId');
 
-    const file = filesService.byBarcode(input.fileBarcode);
+    const file = await filesService.byBarcode(input.fileBarcode);
     if (!file) return err(`${input.fileBarcode} is not in the registry.`, 'fileBarcode');
     if (input.pageNo < 1) return err('Page number starts at 1.', 'pageNo');
 
@@ -166,7 +166,7 @@ export const digitizationService: DigitizationApi = {
     return ok(page);
   },
 
-  removePage(pageId) {
+  async removePage(pageId) {
     const state = store.getState();
     const owner = state.batches.find((batch) => batch.pages.some((page) => page.id === pageId));
     const page = owner?.pages.find((row) => row.id === pageId);
@@ -190,7 +190,7 @@ export const digitizationService: DigitizationApi = {
     return ok(true);
   },
 
-  reviewPage(pageId, decision, note) {
+  async reviewPage(pageId, decision, note) {
     const state = store.getState();
     const owner = state.batches.find((batch) => batch.pages.some((page) => page.id === pageId));
     const page = owner?.pages.find((row) => row.id === pageId);
@@ -216,13 +216,16 @@ export const digitizationService: DigitizationApi = {
       });
     });
 
-    const refreshed = digitizationService.batch(owner.id)!;
-    const updated = refreshed.pages.find((row) => row.id === pageId)!;
+    // Re-read rather than mutate a snapshot: the page list is derived from the
+    // store, and a stale copy would report the pre-review status.
+    const refreshed = await digitizationService.batch(owner.id);
+    const updated = refreshed?.pages.find((row) => row.id === pageId);
+    if (!updated) return err('Page not found after review.', 'pageId');
     return ok(updated);
   },
 
-  reviewBatch(batchId, decision, note) {
-    const batch = digitizationService.batch(batchId);
+  async reviewBatch(batchId, decision, note) {
+    const batch = await digitizationService.batch(batchId);
     if (!batch) return err('Batch not found.', 'batchId');
     const reviewable = batch.pages.filter((page) => page.status === 'Pending review');
     if (reviewable.length === 0) return err('No pages are awaiting review.', 'batchId');
@@ -250,10 +253,11 @@ export const digitizationService: DigitizationApi = {
         summary: `${target.code}: ${reviewable.length} page(s) ${status.toLowerCase()}`,
       });
     });
-    return ok(digitizationService.batch(batchId)!);
+    const reviewed = await digitizationService.batch(batchId);
+    return reviewed ? ok(reviewed) : err('Batch not found after review.', 'batchId');
   },
 
-  pendingReviewCount() {
+  async pendingReviewCount() {
     return store
       .getState()
       .batches.flatMap((batch) => batch.pages)

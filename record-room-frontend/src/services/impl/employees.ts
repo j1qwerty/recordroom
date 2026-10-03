@@ -26,7 +26,7 @@ function matchSearch(employee: Employee, needle: string): boolean {
 }
 
 export const employeesService: EmployeesApi = {
-  list(query: EmployeeQuery = {}) {
+  async list(query: EmployeeQuery = {}) {
     const search = query.search?.trim().toLowerCase() ?? '';
     const filtered = store.getState().employees.filter((employee) => {
       if (search && !matchSearch(employee, search)) return false;
@@ -51,11 +51,11 @@ export const employeesService: EmployeesApi = {
     };
   },
 
-  get(id) {
+  async get(id) {
     return store.getState().employees.find((employee) => employee.id === id) ?? null;
   },
 
-  byCode(code) {
+  async byCode(code) {
     const needle = code.trim().toUpperCase();
     if (!needle) return null;
     return (
@@ -65,10 +65,11 @@ export const employeesService: EmployeesApi = {
     );
   },
 
-  create(input) {
+  async create(input) {
     const code = input.employeeCode.trim().toUpperCase();
     if (!code) return err('Employee code is required.', 'employeeCode');
-    if (employeesService.byCode(code)) return err(`${code} is already registered.`, 'employeeCode');
+    if (await employeesService.byCode(code))
+      return err(`${code} is already registered.`, 'employeeCode');
     if (!input.name.trim()) return err('Employee name is required.', 'name');
     if (input.mobile && !/^\d{10}$/.test(input.mobile.trim())) {
       return err('Mobile must be 10 digits.', 'mobile');
@@ -99,12 +100,12 @@ export const employeesService: EmployeesApi = {
     return ok(employee);
   },
 
-  update(id, input) {
-    const current = employeesService.get(id);
+  async update(id, input) {
+    const current = await employeesService.get(id);
     if (!current) return err('Employee not found.', 'id');
 
     if (input.employeeCode && input.employeeCode.trim().toUpperCase() !== current.employeeCode) {
-      const clash = employeesService.byCode(input.employeeCode);
+      const clash = await employeesService.byCode(input.employeeCode);
       if (clash)
         return err(
           `${input.employeeCode.trim().toUpperCase()} is already registered.`,
@@ -145,8 +146,8 @@ export const employeesService: EmployeesApi = {
     return ok(updated);
   },
 
-  remove(id) {
-    const current = employeesService.get(id);
+  async remove(id) {
+    const current = await employeesService.get(id);
     if (!current) return err('Employee not found.', 'id');
     const batches = store
       .getState()
@@ -171,7 +172,7 @@ export const employeesService: EmployeesApi = {
     return ok(true);
   },
 
-  departments() {
+  async departments() {
     return [...new Set(store.getState().employees.map((employee) => employee.department))].sort();
   },
 };

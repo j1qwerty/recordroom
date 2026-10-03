@@ -1,9 +1,9 @@
-/**
+﻿/**
  * `activity_log_tbl` equivalent plus `login_history` reads.
  *
  * Every mutating service calls `log()` inside the same `store.update()` draft
  * as the change itself, so an audit row can never drift from the data it
- * describes — the transactional guarantee the legacy app lacked.
+ * describes â€” the transactional guarantee the legacy app lacked.
  */
 
 import { type AuditApi, type AuditQuery } from '../contracts';
@@ -61,7 +61,7 @@ const ACTION_ORDER: AuditAction[] = [
 ];
 
 export const auditService: AuditApi = {
-  list(query: AuditQuery = {}): AuditEntry[] {
+  async list(query: AuditQuery = {}): Promise<AuditEntry[]> {
     const { audit } = store.getState();
     const search = query.search?.trim().toLowerCase() ?? '';
     const filtered = audit.filter((entry) => {
@@ -78,7 +78,7 @@ export const auditService: AuditApi = {
     return filtered.slice(0, query.limit ?? 200);
   },
 
-  loginHistory(query = {}) {
+  async loginHistory(query = {}) {
     const { loginHistory } = store.getState();
     const search = query.search?.trim().toLowerCase() ?? '';
     return loginHistory
@@ -95,7 +95,7 @@ export const auditService: AuditApi = {
       .slice(0, 250);
   },
 
-  actors() {
+  async actors() {
     return [...new Set(store.getState().audit.map((entry) => entry.actor))].sort();
   },
 };

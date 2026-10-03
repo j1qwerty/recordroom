@@ -2,8 +2,16 @@
  * Single entry point for the whole frontend data layer.
  *
  * Pages import `service` from here (or the hooks in `../hooks/useService`) and
- * never touch `src/data/mock.ts` directly. Swapping the in-memory adapter for
- * `fetch` against `dotnet-api/` means replacing this object only.
+ * never touch `src/data/mock.ts` or the HTTP client directly.
+ *
+ * Two implementations satisfy `RecordRoomService`:
+ *
+ * - `./impl` — in-memory, seeded from `src/data/mock.ts`. No backend needed.
+ * - `./http` — the .NET 10 API in `dotnet-api/`, which owns paging, filtering,
+ *   sorting and every business rule.
+ *
+ * `VITE_API_MODE` picks between them and defaults to `local`, so the app still
+ * runs with no backend. Set `VITE_API_MODE=http` to exercise the real API.
  */
 
 import type { RecordRoomService } from './contracts';
@@ -23,8 +31,29 @@ import { reportsService } from './impl/reports';
 import { uploadsService } from './impl/uploads';
 import { usersService } from './impl/users';
 import { inquiriesService, mediaService } from './impl/inquiries';
+import {
+  httpAuditService,
+  httpAuthService,
+  httpBarcodesService,
+  httpBulkService,
+  httpDashboardService,
+  httpDigitizationService,
+  httpEmployeesService,
+  httpFilesService,
+  httpInquiriesService,
+  httpIssuesService,
+  httpLocationsService,
+  httpMediaService,
+  httpMovementsService,
+  httpReportsService,
+  httpUploadsService,
+  httpUsersService,
+} from './http';
+import { apiBase } from './http/client';
 
-export const service: RecordRoomService = {
+const useHttp = import.meta.env.VITE_API_MODE === 'http';
+
+const localService: RecordRoomService = {
   auth: authService,
   locations: locationsService,
   files: filesService,
@@ -41,8 +70,41 @@ export const service: RecordRoomService = {
   users: usersService,
   inquiries: inquiriesService,
   media: mediaService,
-  reset: () => store.reset(),
+  async reset() {
+    store.reset();
+  },
 };
+
+const httpService: RecordRoomService = {
+  auth: httpAuthService,
+  locations: httpLocationsService,
+  files: httpFilesService,
+  issues: httpIssuesService,
+  movements: httpMovementsService,
+  employees: httpEmployeesService,
+  digitization: httpDigitizationService,
+  uploads: httpUploadsService,
+  bulk: httpBulkService,
+  audit: httpAuditService,
+  reports: httpReportsService,
+  barcodes: httpBarcodesService,
+  dashboard: httpDashboardService,
+  users: httpUsersService,
+  inquiries: httpInquiriesService,
+  media: httpMediaService,
+  async reset() {
+    // The API owns the data; there is no local snapshot to reload. A reload is
+    // the honest equivalent of "start again from the seed".
+    window.location.reload();
+  },
+};
+
+export const service: RecordRoomService = useHttp ? httpService : localService;
+
+/** Which implementation is live, for the shell's connection indicator. */
+export const dataSource: 'api' | 'local' = useHttp ? 'api' : 'local';
+
+export { apiBase };
 
 export type { RecordRoomService } from './contracts';
 export { can, permissionsFor, ROLE_DESCRIPTIONS, PERMISSIONS } from './permissions';
