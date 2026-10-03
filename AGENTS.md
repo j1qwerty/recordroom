@@ -17,7 +17,8 @@
 
 ## Ask-first rule
 
-If Firebase or an admin panel for contact/inquiry-type data was not explicitly requested, **ask the user first** (Firebase only / Firebase + admin / neither). Never silently add either.
+Firebase is not used in this project — do not introduce it (no Firestore, no Firebase SDK, no `VITE_FIREBASE_*` vars). Persistence for inquiries/media waits for `dotnet-api/`.
+If an admin panel for contact/inquiry-type data was not explicitly requested, **ask the user first** before adding one. Never silently add it.
 
 ## Frontend setup (`record-room-frontend/`)
 
@@ -42,8 +43,7 @@ pnpm build
 ## Boundaries that agents get wrong
 
 - Mock data (`src/data/mock.ts`: 2 rooms, 6 files) stands in for ~25 lakh records. Keep the `Showing 1-6 of 2,478,450`-style labels honest; real pagination/sort/filter belongs to the future API, not the browser.
-- Firestore is env-gated (`src/lib/firebase.ts`): without `VITE_FIREBASE_*` vars it returns `{ mode: 'demo' }`. Only collections allowed: `inquiries`, `mediaAssets`. Never put Admin SDK / service-account JSON in the frontend.
-- Image URLs: browser `Image.onload` preview must succeed before `saveMediaLink`; reject unsafe protocols; handle broken/changed URLs.
-- Firebase env: copy `.env.example` → `.env.local`; production values go in Netlify site config, never committed.
+- No Firebase: existing `src/lib/firebase.ts` / `src/services/firestore.ts` are unused — do not wire, extend, or add env vars for them. Inquiry/media pages stay demo/local-only until `dotnet-api/` provides real endpoints.
+- Image URLs: validate in-browser (`Image.onload` preview must succeed before accept); reject unsafe protocols; handle broken/changed URLs.
 - New admin code goes under `src/admin/` with its own layout; UI hiding is not authorization.
 - Local workflow: git commit at every significant step, conventional messages. No ZIP deliverables.
