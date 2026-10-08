@@ -8,9 +8,9 @@ digitization batches, reports, audit.
 
 | Path | Status |
 |---|---|
-| `record-room-frontend/` | Complete React + TypeScript frontend, mock-service backed |
+| `record-room-frontend/` | Complete React + TypeScript frontend, API-backed in `http` mode |
 | `jhs_digitization-og-php-app/` | Legacy CodeIgniter PHP app — reference-only, do not edit |
-| `dotnet-api/` | Planned .NET 10 backend (does not exist yet; build only after frontend is finalized) |
+| `dotnet-api/` | .NET 10 + SQL Server backend implementing the frontend service contract |
 | `docs/` | PRD, scope, architecture, data model, frontend spec, QA, security, gap report |
 
 ## Where to start
@@ -63,9 +63,26 @@ Live CodeIgniter app on the Contabo VPS (bare IP + port, HTTP only):
 - Deploy: `.\deploy-lagacy-recordroom.ps1` (add `-SkipConfirm` for CI)
 - Web root: `/var/www/legacy-recordroom/html`, nginx site `legacy-recordroom`
 
+## Modern app live project
+
+React frontend + .NET 10 API on the same Contabo VPS (bare IP + port, HTTP
+only — a bare IP cannot get a normal TLS certificate):
+
+- Web: `http://147.93.155.185:8083/` (SPA served by nginx, calls same-origin `/api`)
+- API health: `http://147.93.155.185:8083/api/health` (proxied to the API on `127.0.0.1:5006`)
+- Swagger: `http://147.93.155.185:8083/swagger/`
+- Login: `admin` / `Demo@12345` (also `supervisor`, `operator`, `employee`; mobile PIN `1234`)
+- Deploy: `.\deploy-recordroom.ps1` — interactive menu `1` API only, `2` web only, `3` both
+  (or `-Target api|web|both -SkipConfirm` for CI)
+- VPS layout: web root `/var/www/recordroom/html`, API `/var/www/recordroom/app`
+  (systemd `recordroom-api`), env `/etc/recordroom/recordroom.env`,
+  nginx site `recordroom`, SQL Server database `RecordRoom` + login `recordroom_app`
+- The API applies EF migrations and seeds the demo dataset on first boot.
+
 ## Roadmap
 
-1. Freeze `src/services/contracts.ts` as the API contract.
-2. Scaffold `dotnet-api/` per `docs/ARCHITECTURE.md` + `docs/DATA-MODEL.md` and
-   replace the in-memory adapter with paginated, authorized endpoints. SQLite is
-   the dev store; SQL Server is the production target.
+1. ~~Freeze `src/services/contracts.ts` as the API contract.~~ Done — `dotnet-api/`
+   implements it and the frontend `http` adapter consumes it.
+2. ~~Scaffold `dotnet-api/`~~ Done — .NET 10 + SQL Server, deployed live (see above).
+   Remaining: harden for scale (persisted Hangfire storage, Redis cache, HTTPS
+   via a domain).

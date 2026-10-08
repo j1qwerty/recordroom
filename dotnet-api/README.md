@@ -44,6 +44,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-api.ps1 -BaseUr
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-api.ps1 -SkipDestructive   # read-only pass
 ```
 
+## Production deploy
+
+Deployed to the Contabo VPS with `..\..\deploy-recordroom.ps1` (run from the
+repo root; menu `1` API only, `2` web only, `3` both). Live at
+`http://147.93.155.185:8083/` — web on nginx `:8083`, API on `127.0.0.1:5006`,
+SQL Server database `RecordRoom`. The app applies migrations and seeds on
+first boot, so no manual SQL step is needed once the `recordroom_app` login
+exists (the deploy script creates it).
+
 142 assertions covering auth, the location hierarchy guards, registry
 validation, multi-file issue with a partial return, audit and movement trails,
 digitization versioning, bulk classification, barcodes, reports, dashboard
