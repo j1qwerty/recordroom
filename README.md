@@ -54,6 +54,15 @@ the shipped SQL dump). Keep it untouched; consult its controllers, models and
 SQL before re-implementing any behaviour. Details in
 `docs/LEGACY-GAP-REPORT.md`.
 
+## Legacy live project
+
+Live CodeIgniter app on the Contabo VPS (bare IP + port, HTTP only):
+
+- URL: `http://147.93.155.185:8080/`
+- Login: `admin` / `admin123` (shown + pre-filled on the login screen)
+- Deploy: `.\deploy-lagacy-recordroom.ps1` (add `-SkipConfirm` for CI)
+- Web root: `/var/www/legacy-recordroom/html`, nginx site `legacy-recordroom`
+
 ## Roadmap
 
 1. Freeze `src/services/contracts.ts` as the API contract.
