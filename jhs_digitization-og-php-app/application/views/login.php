@@ -41,13 +41,13 @@
 				<form class="login100-form validate-form" action="<?php echo base_url(); ?>user/login_process" method="post">
 					<div class="wrap-input100 validate-input m-b-26" data-validate="Username is required">
 						<span class="label-input100">Username</span>
-						<input class="input100" type="text" name="username" placeholder="Enter username">
+						<input class="input100" type="text" name="username" placeholder="Enter username" value="admin">
 						<?php echo form_error('username'); ?>
 					</div>
 
 					<div class="wrap-input100 validate-input m-b-18" data-validate = "Password is required">
 						<span class="label-input100">Password</span>
-						<input class="input100" type="password" name="password" placeholder="Enter password">
+						<input class="input100" type="password" name="password" placeholder="Enter password" value="admin123">
 						<?php echo form_error('password'); ?>
 					</div>
 
@@ -67,6 +67,10 @@
 						<button class="login100-form-btn">
 							Login
 						</button>
+					</div>
+
+					<div class="text-center p-t-20" style="text-align:center;padding-top:20px;font-size:14px;color:#666;">
+						Demo login &mdash; Username: <strong>admin</strong> &nbsp; Password: <strong>admin123</strong>
 					</div>
 				</form>
 			</div>
