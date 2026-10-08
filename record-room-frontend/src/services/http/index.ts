@@ -76,6 +76,7 @@ import type {
   MediaLinkPayload,
   MediaLinkRecord,
 } from '../impl/inquiries';
+import { session } from '../impl/session';
 
 type Dto = Record<string, unknown>;
 
@@ -104,6 +105,7 @@ export const httpAuthService: AuthApi = {
     const data = result.value;
     setToken(str(data.token));
     const user = toAppUser(data.user as Dto);
+    session.set(user);
     cacheUser(user);
     return ok(user);
   },
@@ -127,6 +129,7 @@ export const httpAuthService: AuthApi = {
     if (!result.ok) return result;
     setToken(str(result.value.token));
     const user = toAppUser(result.value.user as Dto);
+    session.set(user);
     cacheUser(user);
     return ok(user);
   },
@@ -136,6 +139,7 @@ export const httpAuthService: AuthApi = {
     if (!result.ok) return result;
     setToken(str(result.value.token));
     const user = toAppUser(result.value.user as Dto);
+    session.set(user);
     cacheUser(user);
     return ok(user);
   },
@@ -155,8 +159,9 @@ export const httpAuthService: AuthApi = {
       password,
     });
     if (!result.ok) return result;
+    // Recovery only rotates the password; it does not sign the user in, so the
+    // session and its caches are left untouched (matches the local adapter).
     const user = toAppUser(result.value);
-    cacheUser(user);
     return ok(user);
   },
 
@@ -168,10 +173,13 @@ export const httpAuthService: AuthApi = {
       /* the token is cleared regardless */
     }
     setToken(null);
+    session.set(null);
     cacheUser(null);
   },
 
   currentUser() {
+    const live = session.get();
+    if (live) return live;
     const raw = readStoredKey(AUTH_CACHE_KEY);
     if (!raw) return null;
     try {
@@ -182,6 +190,7 @@ export const httpAuthService: AuthApi = {
   },
 
   setCurrentUser(user) {
+    session.set(user);
     cacheUser(user);
   },
 

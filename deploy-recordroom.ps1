@@ -216,7 +216,7 @@ try {
 
     if (-not $SkipConfirm) {
         Write-Host ''
-        Write-Host "       Deploy '$Target' to $PublicUrl?" -ForegroundColor White
+        Write-Host "       Deploy '$Target' to ${PublicUrl}?" -ForegroundColor White
         if ($deployApi) { Write-Host '         API: dotnet-api/ -> /var/www/recordroom/app (:5006 -> nginx :8083/api)' -ForegroundColor Gray }
         if ($deployWeb) { Write-Host '         Web: record-room-frontend/dist -> /var/www/recordroom/html' -ForegroundColor Gray }
         Write-Host "         Remote DB:  SQL Server RecordRoom + recordroom_app login" -ForegroundColor Gray
