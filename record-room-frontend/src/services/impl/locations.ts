@@ -42,6 +42,42 @@ export const locationsService: LocationsApi = {
     return store.getState().rooms;
   },
 
+  async addRoom(input) {
+    const code = input.code.trim().toUpperCase();
+    const name = input.name.trim();
+    if (!code) return err('Room code is required.', 'code');
+    if (!name) return err('Room name is required.', 'name');
+    if (store.getState().rooms.some((room) => room.code.toUpperCase() === code)) {
+      return err(`Room code ${code} is already in use.`, 'code');
+    }
+
+    const room: Room = {
+      id: newId('room'),
+      code,
+      name,
+      building: input.building?.trim() ?? '',
+      floor: input.floor?.trim() ?? '',
+      occupancy: 0,
+      capacity: Math.max(1, input.capacity ?? 100),
+      status: 'Operational',
+      sections: [],
+      storageUnits: [],
+    };
+
+    store.update((draft) => {
+      draft.rooms.push(room);
+      log(draft, {
+        action: 'Create',
+        entity: 'Room',
+        entityId: room.id,
+        before: '—',
+        after: `${room.code} / ${room.name}`,
+        summary: `Room ${room.code} created`,
+      });
+    });
+    return ok(room);
+  },
+
   async room(id) {
     return store.getState().rooms.find((room) => room.id === id) ?? null;
   },
