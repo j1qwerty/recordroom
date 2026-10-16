@@ -39,7 +39,7 @@ export function AppShell() {
             theme={theme}
             setTheme={setTheme}
             onMenu={() => setMobileOpen(true)}
-            onCommandPalette={() => setPaletteOpen(true)}
+            onCommandPalette={() => window.dispatchEvent(new CustomEvent('rr:open-command-palette'))}
           />
           <main className="relative min-w-0">
             <div className="pointer-events-none absolute inset-x-0 top-0 h-56 page-grid opacity-25" />
