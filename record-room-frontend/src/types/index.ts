@@ -135,6 +135,8 @@ export interface Room {
 
 export type FileStatus = 'Available' | 'Issued' | 'Under Digitization' | 'Missing' | 'Archived';
 export type FileType = 'Letter' | 'File' | 'Register' | 'Map' | 'Drawing' | 'Report';
+export type RecordKind = 'File' | 'Map';
+export type DocumentSize = 'A0' | 'A1' | 'A2' | 'A3' | 'A4' | 'Other';
 
 /** `file_tbl`. */
 export interface RecordFile {
@@ -148,6 +150,10 @@ export interface RecordFile {
   department: string;
   year: number;
   fileType: FileType;
+  /** Operational distinction between a physical record file and a large-format map. */
+  recordKind?: RecordKind;
+  /** Physical sheet/document size; A0 records default to Map at creation time. */
+  documentSize?: DocumentSize;
   status: FileStatus;
   location: string;
   roomId: string;
@@ -182,6 +188,8 @@ export interface FileCreateInput {
   department: string;
   year: number;
   fileType: FileType;
+  recordKind?: RecordKind;
+  documentSize?: DocumentSize;
   shelfId: string;
   position: number;
   pincode: string;
