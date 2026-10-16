@@ -68,7 +68,9 @@ public sealed class IssuesService(AppDbContext db, IAuditWriter audit, ICurrentU
                 || i.ReceiptNumber.ToLower().Contains(needle)
                 || i.Lines.Any(line =>
                     line.Barcode.ToLower().Contains(needle)
-                    || (line.RecordFile != null && line.RecordFile.Subject.ToLower().Contains(needle))));
+                    || (line.RecordFile != null && line.RecordFile.Subject.ToLower().Contains(needle))
+                    || (line.RecordFile != null && line.RecordFile.EOfficeReference != null
+                        && line.RecordFile.EOfficeReference.ToLower().Contains(needle))));
         }
 
         var total = await query.CountAsync(ct);
