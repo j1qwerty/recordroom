@@ -15,6 +15,7 @@ public class RecordFile
     public FileKind FileKind { get; set; } = FileKind.File;
     public string RecordKind { get; set; } = "File";
     public string DocumentSize { get; set; } = "Other";
+    public string? EOfficeReference { get; set; }
     public RecordStatus Status { get; set; } = RecordStatus.Available;
 
     /// <summary>Derived display string: room / section / almirah / shelf codes.</summary>
