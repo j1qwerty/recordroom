@@ -8,7 +8,7 @@
  * `/api/media-assets`, this file becomes the HTTP adapter and the pages stay
  * unchanged.
  *
- * Note: no admin panel for inquiry data is added here Ã¢â‚¬â€ `AGENTS.md` requires
+ * Note: no admin panel for inquiry data is added here — `AGENTS.md` requires
  * asking before introducing one.
  */
 
@@ -78,7 +78,7 @@ export const inquiriesService = {
         action: 'Create',
         entity: 'Inquiry',
         entityId: record.id,
-        before: 'Ã¢â‚¬â€',
+        before: '—',
         after: `${record.department || 'unassigned'}`,
         summary: `Inquiry submitted by ${record.name}`,
       });
@@ -135,7 +135,7 @@ export const mediaService = {
         action: 'Create',
         entity: 'MediaLink',
         entityId: record.id,
-        before: 'Ã¢â‚¬â€',
+        before: '—',
         after: record.url,
         summary: `Media link "${record.title}" stored`,
       });
