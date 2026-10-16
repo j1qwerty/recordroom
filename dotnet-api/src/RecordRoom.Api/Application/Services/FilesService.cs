@@ -78,6 +78,7 @@ public sealed class FilesService(
                 .FirstOrDefaultAsync(s => s.Id == f.ShelfId, ct);
         var unit = shelf?.StorageUnit;
         var room = unit is null ? null : await db.Rooms.FirstOrDefaultAsync(r => r.Id == unit.RoomId, ct);
+        f.Shelf = shelf;
         return ToDto(f, unit?.Section, unit, room);
     }
 
