@@ -13,6 +13,8 @@ public class RecordFile
     public string Department { get; set; } = string.Empty;
     public int Year { get; set; }
     public FileKind FileKind { get; set; } = FileKind.File;
+    public string RecordKind { get; set; } = "File";
+    public string DocumentSize { get; set; } = "Other";
     public RecordStatus Status { get; set; } = RecordStatus.Available;
 
     /// <summary>Derived display string: room / section / almirah / shelf codes.</summary>
