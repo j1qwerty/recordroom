@@ -13,6 +13,8 @@ import type { MapUpload } from '../../types';
 import { log } from './audit';
 import { filesService } from './files';
 import { session } from './session';
+import { localDocumentBlob, saveLocalRowDocument } from './document-storage';
+import { validateDocumentFile } from '../../lib/document';
 
 export const uploadsService: UploadsApi = {
   async maps(query = {}) {
@@ -82,6 +84,31 @@ export const uploadsService: UploadsApi = {
       });
     });
     return ok(row);
+  },
+
+  async uploadMapDocument(id, file) {
+    const issue = validateDocumentFile(file);
+    if (issue) return err(issue, 'document');
+    const original = store.getState().maps.find((row) => row.id === id);
+    if (!original) return err('Map not found.', 'id');
+    const created = await uploadsService.addMap({
+      fileBarcode: original.fileBarcode,
+      pageNo: original.pageNo,
+      filename: file.name,
+      sizeKb: Math.max(1, Math.ceil(file.size / 1024)),
+    });
+    if (!created.ok) return created;
+    const info = saveLocalRowDocument('map', created.value.id, file);
+    const updated = { ...created.value, ...info, hasDocument: true };
+    store.update((draft) => {
+      const index = draft.maps.findIndex((row) => row.id === created.value.id);
+      if (index >= 0) draft.maps[index] = updated;
+    });
+    return ok(updated);
+  },
+
+  async mapBlob(id) {
+    return localDocumentBlob('map', id);
   },
 
   async removeMap(id) {
