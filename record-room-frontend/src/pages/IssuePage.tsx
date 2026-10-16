@@ -240,6 +240,7 @@ export function IssuePage() {
                           </div>
                           <p className="mt-1 truncate text-sm font-medium">{file.subject}</p>
                           <p className="muted mt-0.5 text-[11px]">{file.fileNumber} · {file.location}</p>
+                          <p className="muted mt-1 text-[11px]">E-office: {file.eOfficeReference?.trim() || 'Not linked'}</p>
                         </div>
                         <Button
                           size="sm"
@@ -281,6 +282,7 @@ export function IssuePage() {
                         </p>
                         <p className="mt-1 truncate text-sm font-semibold">{file.subject}</p>
                         <p className="muted mt-0.5 text-[11px]">{file.location}</p>
+                        <p className="muted mt-1 text-[11px]">E-office: {file.eOfficeReference?.trim() || 'Not linked'}</p>
                       </div>
                       <button
                         type="button"
