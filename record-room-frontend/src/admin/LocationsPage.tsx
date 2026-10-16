@@ -175,7 +175,7 @@ export function LocationsPage() {
         actions={
           allowed('locations.edit') && (
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" icon={<Plus size={17} />} onClick={() => setDialog({ kind: 'room' })}>
+              <Button variant="secondary" icon={<Plus size={17} />} onClick={() => setDialog({ kind: 'room' })}>
                 Add room
               </Button>
               <Button icon={<FloppyDisk size={17} />} onClick={saveLayout}>
