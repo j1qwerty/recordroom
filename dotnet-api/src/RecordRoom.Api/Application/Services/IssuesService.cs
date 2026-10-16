@@ -63,7 +63,12 @@ public sealed class IssuesService(AppDbContext db, IAuditWriter audit, ICurrentU
             query = query.Where(i =>
                 i.BorrowerName.ToLower().Contains(needle)
                 || i.BorrowerEmployeeCode.ToLower().Contains(needle)
-                || i.ReceiptNumber.ToLower().Contains(needle));
+                || i.Department.ToLower().Contains(needle)
+                || i.Purpose.ToLower().Contains(needle)
+                || i.ReceiptNumber.ToLower().Contains(needle)
+                || i.Lines.Any(line =>
+                    line.Barcode.ToLower().Contains(needle)
+                    || (line.RecordFile != null && line.RecordFile.Subject.ToLower().Contains(needle))));
         }
 
         var total = await query.CountAsync(ct);
