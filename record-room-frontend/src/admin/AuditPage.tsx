@@ -151,7 +151,7 @@ export function AuditPage() {
               <TextInput
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Summary, entity, IPâ€¦"
+                placeholder="Summary, entity, IP…"
                 className="pl-10"
                 aria-label="Search audit entries"
               />
@@ -223,7 +223,7 @@ export function AuditPage() {
                   <div className="min-w-0">
                     <p className="text-sm font-semibold">{entry.summary}</p>
                     <p className="muted mt-1 text-[11px]">
-                      {entry.entity} Â· <span className="font-mono">{entry.entityId}</span>
+                      {entry.entity} · <span className="font-mono">{entry.entityId}</span>
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
                       <span className="rounded bg-[var(--rr-bg)] px-2 py-1">
@@ -277,7 +277,7 @@ export function AuditPage() {
                 {logins.map((entry) => (
                   <tr key={entry.id} className="hover:bg-[var(--rr-bg)]">
                     <td className="px-5 py-4 text-xs muted">{entry.loginAt}</td>
-                    <td className="px-5 py-4 text-xs muted">{entry.logoutAt ?? 'â€”'}</td>
+                    <td className="px-5 py-4 text-xs muted">{entry.logoutAt ?? '—'}</td>
                     <td className="px-5 py-4">
                       <p className="font-mono text-xs font-semibold">{entry.userName}</p>
                       <p className="muted text-[11px]">{entry.role}</p>
@@ -311,7 +311,7 @@ export function AuditPage() {
           <ShieldCheck size={20} className="mt-0.5 shrink-0 text-accent" />
           <p className="muted text-sm leading-6">
             This log is a frontend projection. For 25 lakh files the authoritative trail belongs in
-            the API with server-side filtering, retention policy and tamper evidence â€” see{' '}
+            the API with server-side filtering, retention policy and tamper evidence — see{' '}
             <span className="font-mono text-xs">docs/SECURITY.md</span>.
           </p>
         </div>
