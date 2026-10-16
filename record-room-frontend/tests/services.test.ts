@@ -199,7 +199,7 @@ describe('files.create', () => {
     if (!cleared.ok) return;
     expect(cleared.value.eOfficeReference).toBeUndefined();
     expect(
-      (await service.files.list({ eOfficeStatus: 'Not linked' })).items.some(
+      (await service.files.list({ search: created.value.fileBarcode, eOfficeStatus: 'Not linked' })).items.some(
         (file) => file.id === created.value.id,
       ),
     ).toBe(true);
