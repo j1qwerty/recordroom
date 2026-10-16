@@ -130,6 +130,7 @@ public sealed class FilesService(
         query = (q.Sort?.ToLower()) switch
         {
             "subject" => descending ? query.OrderByDescending(f => f.Subject) : query.OrderBy(f => f.Subject),
+            "filebarcode" => descending ? query.OrderByDescending(f => f.Barcode) : query.OrderBy(f => f.Barcode),
             "year" => descending ? query.OrderByDescending(f => f.Year) : query.OrderBy(f => f.Year),
             "department" => descending ? query.OrderByDescending(f => f.Department) : query.OrderBy(f => f.Department),
             "lastmovement" => descending ? query.OrderByDescending(f => f.LastMovementAt) : query.OrderBy(f => f.LastMovementAt),
@@ -208,6 +209,8 @@ public sealed class FilesService(
 
         if (string.IsNullOrWhiteSpace(input.Subject))
             errors.Add(new FieldError("Subject is required.", "subject"));
+        if (input.EOfficeReference?.Trim().Length > 200)
+            errors.Add(new FieldError("E-office reference must be 200 characters or fewer.", "eOfficeReference"));
         if (string.IsNullOrWhiteSpace(input.Department))
             errors.Add(new FieldError("Department is required.", "department"));
         if (input.Year is < 1800 or > 2200)
