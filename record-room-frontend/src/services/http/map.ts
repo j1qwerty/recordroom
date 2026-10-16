@@ -38,9 +38,10 @@ import type {
 } from '../../types';
 import type { ReportKey } from '../../types';
 import { toId } from './client';
+import { cleanDisplayText } from '../../lib/utils';
 
 const str = (value: unknown): string =>
-  value === null || value === undefined ? '' : String(value);
+  value === null || value === undefined ? '' : cleanDisplayText(String(value));
 
 const num = (value: unknown, fallback = 0): number =>
   typeof value === 'number' && Number.isFinite(value) ? value : fallback;
