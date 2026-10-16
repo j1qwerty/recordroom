@@ -211,11 +211,11 @@ export function DashboardPage() {
         <p className="muted mt-1 text-sm">Go straight to the desk you need.</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            { title: 'Find a record', detail: 'Search by barcode or subject', href: '/search', icon: MagnifyingGlass },
-            { title: 'Issue a file', detail: 'Record a file handover', href: '/issue', icon: Files },
-            { title: 'Return a file', detail: 'Close an open receipt', href: '/return', icon: Clock },
-            { title: 'View map uploads', detail: 'Open scanned maps and copies', href: '/admin/maps', icon: MapPin },
-          ].map((action) => {
+            { title: 'Find a record', detail: 'Search by barcode or subject', href: '/search', icon: MagnifyingGlass, permission: 'files.view' as const },
+            { title: 'Issue a file', detail: 'Record a file handover', href: '/issue', icon: Files, permission: 'issue.issue' as const },
+            { title: 'Return a file', detail: 'Close an open receipt', href: '/return', icon: Clock, permission: 'issue.return' as const },
+            { title: 'View map uploads', detail: 'Open scanned maps and copies', href: '/admin/maps', icon: MapPin, permission: 'files.view' as const },
+          ].filter((action) => allowed(action.permission)).map((action) => {
             const Icon = action.icon;
             return (
               <Link key={action.href} to={action.href} className="focus-ring flex items-center gap-3 rounded-xl border border-base bg-[var(--rr-surface)] p-4 transition hover:bg-[var(--rr-surface-2)]">
