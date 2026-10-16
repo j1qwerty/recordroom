@@ -1,4 +1,5 @@
 ﻿import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { FileImage, MagnifyingGlass, Plus, Trash } from '@phosphor-icons/react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
@@ -23,11 +24,13 @@ import type { MapUpload, RecordFile } from '../types';
 export function MapsPage() {
   const service = useService();
   const session = useSession();
+  const location = useLocation();
+  const presetBarcode = new URLSearchParams(location.search).get('fileBarcode') ?? '';
   // MapsPage rows are digitization scans, so reuse that permission. It matches the
   // API's Admin/Supervisor/Operator gate on `POST /api/uploads/maps/{id}/document`.
   const canUpload = session.allowed('digitization.upload');
 
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(presetBarcode);
   const [adding, setAdding] = useState(false);
   const [flash, setFlash] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
@@ -37,13 +40,13 @@ export function MapsPage() {
     data: rows,
     loading,
     reload,
-  } = useQuery(() => service.uploads.maps({ search }), [search], [] as MapUpload[]);
+  } = useQuery(() => (presetBarcode && search.trim() === presetBarcode ? service.uploads.maps({ fileBarcode: presetBarcode }) : service.uploads.maps({ search })), [search, presetBarcode], [] as MapUpload[]);
   // Registry rows a map can hang off. Derived once and kept in the query so the
   // datalist does not refetch while typing in the form.
   const { data: grouped } = useQuery(
     async () => {
       const result = await service.files.list({ pageSize: 200 });
-      return result.items.filter((file) => file.fileType === 'Map' || file.fileType === 'Drawing');
+      return result.items.filter((file) => file.recordKind === 'Map' || (!file.recordKind && (file.fileType === 'Map' || file.fileType === 'Drawing')));
     },
     [],
     [] as RecordFile[],
@@ -182,6 +185,7 @@ export function MapsPage() {
 
       <Modal open={adding} onClose={() => setAdding(false)} title="Add map page">
         <MapForm
+          initialBarcode={presetBarcode}
           candidates={grouped.map((file) => ({
             barcode: file.fileBarcode,
             label: `${file.fileBarcode} · ${file.subject}`,
@@ -207,9 +211,11 @@ export function MapsPage() {
 
 function MapForm({
   candidates,
+  initialBarcode = '',
   onSubmit,
 }: {
   candidates: Array<{ barcode: string; label: string }>;
+  initialBarcode?: string;
   onSubmit: (input: {
     fileBarcode: string;
     pageNo: number;
@@ -217,7 +223,7 @@ function MapForm({
     sizeKb: number;
   }) => void;
 }) {
-  const [fileBarcode, setFileBarcode] = useState('');
+  const [fileBarcode, setFileBarcode] = useState(initialBarcode);
   const [pageNo, setPageNo] = useState(1);
   const [filename, setFilename] = useState('');
   const [sizeKb, setSizeKb] = useState(1200);
