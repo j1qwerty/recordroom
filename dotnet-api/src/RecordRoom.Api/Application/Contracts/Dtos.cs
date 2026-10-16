@@ -116,6 +116,9 @@ public sealed record FileDto(
     string Status,
     string Location,
     int? RoomId,
+    int? SectionId,
+    int? AlmirahId,
+    int? ShelfId,
     string Section,
     string Almirah,
     string Shelf,
@@ -135,8 +138,8 @@ public sealed record FileDto(
     string? Holder,
     string? HolderEmployeeCode,
     string Description,
-    string RecordKind = "File",
-    string DocumentSize = "Other");
+    string? RecordKind = null,
+    string? DocumentSize = null);
 
 public sealed record FileCreateInput(
     string FileBarcode,
