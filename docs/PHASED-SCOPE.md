@@ -59,7 +59,14 @@
 - Large report jobs.
 - Operational dashboards.
 
-## Phase 4. Integrations and advanced operations
+## Phase 4. Editable permissions (v2)
+
+The role matrix is read-only in v1 — the four role lists are hardcoded in
+`services/permissions.ts` and duplicated in the API's `AuthService`. v2 makes them
+DB-backed and enforced server-side, with the Admin row locked. Design and rollout
+order: **`V2-EDITABLE-PERMISSIONS.md`**.
+
+## Phase 5. Integrations and advanced operations
 
 - Dispatch integration.
 - e-office/HRMS integrations where separately approved.

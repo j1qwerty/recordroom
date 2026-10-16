@@ -105,4 +105,7 @@ carries the behaviour and the screen that exposes it.
 1. Freeze `src/services/contracts.ts` as the API contract.
 2. Scaffold `dotnet-api/` per `docs/ARCHITECTURE.md` + `docs/DATA-MODEL.md`.
 3. Replace the in-memory adapter with paginated endpoints that re-check every
-   permission in `services/permissions.ts` server-side.
+   permission in `services/permissions.ts` server-side. Still open: as of v1 the
+   API authorizes on `[Authorize(Roles = ...)]` only, and
+   `AuthService.PermissionsForRole` is reported to the client at `/me` but never
+   used for an access decision. See `V2-EDITABLE-PERMISSIONS.md`.

@@ -212,9 +212,16 @@ export function UsersPage() {
             </div>
           ))}
         </div>
+        {/* The four role lists are fixed in v1: `services/permissions.ts` and the
+            API's `AuthService.PermissionsForRole` duplicate each other by hand.
+            Editing this matrix is a v2 change - see docs/V2-EDITABLE-PERMISSIONS.md.
+            Until then the API authorizes on `[Authorize(Roles = ...)]`, so this
+            table is documentation of what each role hides, not what it can reach. */}
         <p className="muted mt-4 text-xs leading-6">
-          This matrix hides controls only. The planned .NET 10 API must enforce every one of these
-          checks server-side on each request.
+          These four role definitions are fixed in v1 and shown here for reference. The API
+          currently authorizes on role name, not on this list, so it documents what each role hides
+          in the UI rather than what it may call. Editing the matrix is a v2 change &mdash; see{' '}
+          <span className="font-mono">docs/V2-EDITABLE-PERMISSIONS.md</span>.
         </p>
       </Card>
 

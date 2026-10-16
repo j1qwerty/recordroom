@@ -69,6 +69,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-api.ps1
 - `useDb()` returns the **local** snapshot and is empty under the HTTP adapter. If a page needs a real number or row, read it from a service.
 - Image URLs: validate in-browser (`Image.onload` preview must succeed before accept); reject unsafe protocols; handle broken/changed URLs.
 - New admin code goes under `src/admin/` with its own layout. UI hiding is not authorization — `src/services/permissions.ts` is UX gating only, and `[Authorize(Roles = ...)]` in `dotnet-api/` is the boundary.
+- The permission matrix on `/admin/users` is **read-only in v1 — do not add editing unless the user asks.** The four role lists are hardcoded in `services/permissions.ts` and hand-duplicated in `AuthService.PermissionsForRole`. Note that as of v1 the API authorizes on role *name* only and never enforces that list. The v2 design (DB-backed table, permission policies replacing `[Authorize(Roles = ...)]`, Admin row locked) is `docs/V2-EDITABLE-PERMISSIONS.md`.
 - Local workflow: git commit at every significant step, conventional messages. No ZIP deliverables.
 
 ## Contract seam
