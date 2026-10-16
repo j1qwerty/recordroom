@@ -49,6 +49,26 @@ public class RecordFile
     public List<IssueLine> IssueLines { get; set; } = [];
     public List<DigitizationPage> Pages { get; set; } = [];
     public List<MapUpload> Maps { get; set; } = [];
+    public List<RecordFileDocument> Documents { get; set; } = [];
+}
+
+/// <summary>
+/// An immutable version of a document attached directly to a registry record.
+/// Bytes are stored in private persistent storage; SQL contains version metadata.
+/// </summary>
+public class RecordFileDocument
+{
+    public long Id { get; set; }
+    public int RecordFileId { get; set; }
+    public int Version { get; set; }
+    public required string OriginalFileName { get; set; }
+    public required string StorageKey { get; set; }
+    public required string ContentType { get; set; }
+    public long SizeBytes { get; set; }
+    public required string Sha256 { get; set; }
+    public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
+    public required string UploadedBy { get; set; }
+    public RecordFile? RecordFile { get; set; }
 }
 
 /// <summary>
