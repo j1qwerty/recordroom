@@ -26,6 +26,7 @@ public sealed class FileQuery
     public string? Status { get; init; }
     public string? RecordKind { get; init; }
     public string? FileType { get; init; }
+    public string? EOfficeStatus { get; init; }
     public int? RoomId { get; init; }
     public int? SectionId { get; init; }
     public int? ShelfId { get; init; }
@@ -66,7 +67,7 @@ public sealed class FilesService(
         f.Shelf?.Code ?? string.Empty, f.ShelfBarcode, f.ApproxPosition,
         f.Pincode, f.Area, f.PropertyNo, f.PropertyArea, f.Dealer, f.CodalLife,
         f.CreatedAt, f.CreatedBy, f.UpdatedAt, f.UpdatedBy, Stamp(f.LastMovementAt),
-        f.Holder, f.HolderEmployeeCode, f.Description, f.RecordKind, f.DocumentSize);
+        f.Holder, f.HolderEmployeeCode, f.Description, f.RecordKind, f.DocumentSize, f.EOfficeReference);
 
     private async Task<FileDto?> ProjectAsync(RecordFile f, CancellationToken ct)
     {
@@ -93,6 +94,7 @@ public sealed class FilesService(
                 || f.Department.ToLower().Contains(needle)
                 || f.LocationDisplay.ToLower().Contains(needle)
                 || f.Area.ToLower().Contains(needle)
+                || (f.EOfficeReference != null && f.EOfficeReference.ToLower().Contains(needle))
                 || (f.Holder != null && f.Holder.ToLower().Contains(needle)));
         }
 
@@ -113,6 +115,10 @@ public sealed class FilesService(
             var fileKind = ParseKind(q.FileType);
             query = query.Where(f => f.FileKind == fileKind);
         }
+        if (string.Equals(q.EOfficeStatus, "Linked", StringComparison.OrdinalIgnoreCase))
+            query = query.Where(f => f.EOfficeReference != null && f.EOfficeReference.Trim() != string.Empty);
+        else if (string.Equals(q.EOfficeStatus, "Not linked", StringComparison.OrdinalIgnoreCase))
+            query = query.Where(f => f.EOfficeReference == null || f.EOfficeReference.Trim() == string.Empty);
         if (q.RoomId is not null) query = query.Where(f => f.RoomId == q.RoomId);
         if (q.SectionId is not null) query = query.Where(f => f.SectionId == q.SectionId);
         if (q.ShelfId is not null) query = query.Where(f => f.ShelfId == q.ShelfId);
@@ -264,6 +270,7 @@ public sealed class FilesService(
                 ? (string.Equals(input.DocumentSize, "A0", StringComparison.OrdinalIgnoreCase) ? "Map" : "File")
                 : (string.Equals(input.RecordKind, "Map", StringComparison.OrdinalIgnoreCase) ? "Map" : "File"),
             DocumentSize = input.DocumentSize is "A0" or "A1" or "A2" or "A3" or "A4" ? input.DocumentSize : "Other",
+            EOfficeReference = string.IsNullOrWhiteSpace(input.EOfficeReference) ? null : input.EOfficeReference.Trim(),
             Status = RecordStatus.Available,
             RoomId = room.Id,
             SectionId = unit.SectionId,
