@@ -220,6 +220,65 @@ export async function attempt<T>(
   return err(`Request failed (${response.status}).`);
 }
 
+/** Multipart writes must not set Content-Type manually; fetch supplies the boundary. */
+export async function attemptForm<T>(path: string, body: FormData): Promise<Result<T>> {
+  let response: Response;
+  try {
+    response = await fetch(`${BASE}${path}`, { method: 'POST', headers: authHeader(), body });
+  } catch (cause) {
+    return err<T>(`Cannot reach the record-room API at ${BASE}. Is it running? (${
+      cause instanceof Error ? cause.message : String(cause)
+    })`);
+  }
+  if (response.status === 401) {
+    handleUnauthorized();
+    return err<T>('Your session has expired. Sign in again.');
+  }
+  let envelope: Envelope<unknown>;
+  try {
+    envelope = await parse(response);
+  } catch (cause) {
+    return err<T>(cause instanceof Error ? cause.message : 'The upload response was invalid.');
+  }
+  if (response.ok && envelope.success) return ok<T>(envelope.data as T);
+  const first = envelope.errors?.[0];
+  if (first) return err<T>(first.message, first.field ?? undefined);
+  if (response.status === 403) return err<T>('Your role does not permit that action.');
+  return err<T>(`Upload failed (${response.status}).`);
+}
+
+/** Fetches private document bytes with the current bearer token. */
+export async function getBlob(path: string): Promise<Blob> {
+  let response: Response;
+  try {
+    response = await fetch(`${BASE}${path}`, { headers: authHeader() });
+  } catch (cause) {
+    throw new ApiError(0, `Cannot reach the record-room API at ${BASE}. Is it running? (${
+      cause instanceof Error ? cause.message : String(cause)
+    })`);
+  }
+  if (response.status === 401) {
+    handleUnauthorized();
+    throw new ApiError(401, 'Your session has expired. Sign in again.');
+  }
+  if (!response.ok) {
+    let message = response.status === 403
+      ? 'Your role does not permit that action.'
+      : `Document request failed (${response.status}).`;
+    try {
+      const text = await response.text();
+      if (text) {
+        const data = JSON.parse(text) as { errors?: Array<{ message?: string }>; detail?: string; title?: string };
+        message = data.errors?.[0]?.message ?? data.detail ?? data.title ?? message;
+      }
+    } catch {
+      // Preserve the status-derived message for non-JSON errors.
+    }
+    throw new ApiError(response.status, message);
+  }
+  return response.blob();
+}
+
 /** Reads a `validate` endpoint that answers 200 with a body describing failures. */
 export function toFieldIssues(errors: FieldError[] | null | undefined): FieldIssue[] {
   return (errors ?? []).map((entry) => ({
