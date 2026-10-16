@@ -291,9 +291,9 @@ export function FileDetailPage() {
               <div className="mt-4 rounded-xl border border-dashed border-base p-5">
                 <p className="text-sm font-semibold">No scanned page attached yet.</p>
                 <p className="muted mt-1 text-xs leading-6">
-                  {maps.length} map/copy upload(s) on record. The backend will stitch page versions
-                  into a PDF, attach OCR text and checksums, and enforce access policy — the legacy
-                  <span className="font-mono"> generate_pdf</span> equivalent.
+                  {maps.length} map/copy metadata record(s) on file. This API currently stores
+                  scan names and review metadata, not the underlying PDF or image bytes, so a reader
+                  or download link cannot be opened yet.
                 </p>
               </div>
             ) : (
@@ -312,13 +312,14 @@ export function FileDetailPage() {
                     <StatusBadge status={page.status} />
                   </div>
                 ))}
-                <div className="rounded-xl bg-accent-soft p-3">
+                <div className="rounded-xl border border-base p-3">
                   <p className="text-xs font-semibold">
-                    {pages.length} page version(s) ready for stitching
+                    {pages.length} page metadata record(s)
                   </p>
                   <p className="muted mt-1 text-[11px] leading-5">
-                    Only approved versions are eligible. PDF assembly happens server-side where the
-                    object store lives.
+                    The current API does not persist or serve the associated document bytes. Secure
+                    PDF/image preview and download need document storage endpoints before these rows
+                    can be opened.
                   </p>
                 </div>
               </div>
