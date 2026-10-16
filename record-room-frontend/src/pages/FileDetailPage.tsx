@@ -51,6 +51,8 @@ export function FileDetailPage() {
   const [shelfId, setShelfId] = useState('');
   const [position, setPosition] = useState(1);
   const [reason, setReason] = useState('');
+  const [eOfficeDraft, setEOfficeDraft] = useState<string | null>(null);
+  const [savingEOffice, setSavingEOffice] = useState(false);
   const [flash, setFlash] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
   // One file id drives every read on this page. `rooms` comes back whole because
@@ -132,6 +134,31 @@ export function FileDetailPage() {
     ),
   );
 
+  const saveEOfficeReference = async () => {
+    if (!file) return;
+    setSavingEOffice(true);
+    try {
+      const result = await service.files.updateEOfficeReference(
+        file.id,
+        eOfficeDraft ?? file.eOfficeReference ?? '',
+      );
+      if (!result.ok) {
+        setFlash({ tone: 'danger', text: result.error });
+        return;
+      }
+      setEOfficeDraft(result.value.eOfficeReference ?? '');
+      setFlash({
+        tone: 'success',
+        text: result.value.eOfficeReference
+          ? 'E-office reference saved.'
+          : 'E-office reference cleared.',
+      });
+      reloadFile();
+    } finally {
+      setSavingEOffice(false);
+    }
+  };
+
   const relocate = async () => {
     const result = await service.files.relocate(file.id, shelfId, position, reason);
     if (!result.ok) {
@@ -207,6 +234,44 @@ export function FileDetailPage() {
             <div className="mt-6 rounded-xl bg-[var(--rr-bg)] p-4 text-[var(--rr-text)]">
               <BarcodeSymbol value={buildPayload('File', file.fileBarcode).value} height={56} />
             </div>
+          </Card>
+
+          <Card>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">E-office reference</p>
+                <p className="muted mt-1 text-xs">
+                  {file.eOfficeReference?.trim()
+                    ? 'This registry record is linked to an e-office file.'
+                    : 'No e-office file name or ID has been recorded.'}
+                </p>
+              </div>
+              <Badge tone={file.eOfficeReference?.trim() ? 'success' : 'neutral'}>
+                {file.eOfficeReference?.trim() ? 'Linked' : 'Not linked'}
+              </Badge>
+            </div>
+            {file.eOfficeReference?.trim() && (
+              <p className="mt-3 break-all rounded-lg bg-[var(--rr-bg)] p-3 font-mono text-xs">
+                {file.eOfficeReference}
+              </p>
+            )}
+            {allowed('files.edit') && (
+              <div className="mt-4 space-y-3 border-t border-base pt-4">
+                <Field label="E-office file name / ID" htmlFor="eoffice-reference" hint="Optional. Clear the field to remove the link.">
+                  <TextInput
+                    id="eoffice-reference"
+                    value={eOfficeDraft ?? file.eOfficeReference ?? ''}
+                    onChange={(event) => setEOfficeDraft(event.target.value)}
+                    placeholder="e.g. EOFFICE/REV/2026/00123"
+                  />
+                </Field>
+                <div className="flex justify-end">
+                  <Button onClick={() => void saveEOfficeReference()} disabled={savingEOffice}>
+                    {savingEOffice ? 'Saving…' : 'Save e-office reference'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </Card>
 
           <Card>
