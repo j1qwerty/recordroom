@@ -72,7 +72,7 @@ export function FileDetailPage() {
     [fileId],
     EMPTY_MOVEMENTS,
   );
-  const { data: batches } = useQuery(() => service.digitization.batches(), [], EMPTY_BATCHES);
+  const { data: batches, reload: reloadBatches } = useQuery(() => service.digitization.batches(), [], EMPTY_BATCHES);
   const { data: maps, reload: reloadMaps } = useQuery(
     () => service.uploads.maps({ fileBarcode: file?.fileBarcode ?? '' }),
     [file?.fileBarcode],
@@ -379,7 +379,7 @@ export function FileDetailPage() {
                       canUpload={allowed('digitization.upload')}
                       onUpload={(upload) => service.digitization.uploadPageDocument(page.id, upload)}
                       getBlob={() => service.digitization.pageBlob(page.id)}
-                      onUploaded={() => reloadFile()}
+                      onUploaded={() => reloadBatches()}
                     />
                   </div>
                 ))}
