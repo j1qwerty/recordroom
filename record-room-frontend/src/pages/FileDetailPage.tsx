@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   Barcode,
@@ -10,7 +10,7 @@ import {
   ShieldCheck,
   UserCircle,
 } from '@phosphor-icons/react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Badge } from '../components/ui/Badge';
 import { Card } from '../components/ui/Card';
 import { Button, LinkButton } from '../components/ui/Button';
@@ -47,6 +47,7 @@ type FilePage = DigitizationPage & { batchCode: string };
 
 export function FileDetailPage() {
   const { fileId } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const service = useService();
   const { allowed } = useSession();
@@ -92,6 +93,14 @@ export function FileDetailPage() {
     [],
     EMPTY_ISSUE_PAGE,
   );
+
+  useEffect(() => {
+    if (!file || !location.hash) return;
+    const target = document.getElementById(location.hash.slice(1));
+    if (!target) return;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    target.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+  }, [file, location.hash]);
 
   // The record arrives from the API, so a missing row and an unanswered read
   // are different states: only the latter is still loading.
@@ -302,7 +311,7 @@ export function FileDetailPage() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="text-accent" size={19} />
-                <p className="text-sm font-semibold">Record attachments</p>
+                <p id="record-attachments" className="scroll-mt-24 text-sm font-semibold">Record attachments</p>
               </div>
               <Badge tone={documents.length ? 'success' : 'neutral'}>
                 {documents.length} version(s)
@@ -404,7 +413,7 @@ export function FileDetailPage() {
           <Card>
             <div className="flex items-center gap-2">
               <MapPin className="text-accent" size={19} />
-              <p className="text-sm font-semibold">Maps and copies</p>
+              <p id="map-copies" className="scroll-mt-24 text-sm font-semibold">Maps and copies</p>
             </div>
             <p className="muted mt-1 text-xs leading-5">
               Actual map scans are stored as versioned files. Existing metadata-only map rows can be
@@ -561,7 +570,7 @@ export function FileDetailPage() {
 
           {allowed('files.edit') && (
             <Card>
-              <p className="text-sm font-semibold">Relocate this file</p>
+              <p id="relocate-file" className="scroll-mt-24 text-sm font-semibold">Relocate this file</p>
               <p className="muted mt-1 text-xs leading-6">
                 Identity never changes. Only the shelf and position move, and the change is written
                 to the movement log and the audit trail together.

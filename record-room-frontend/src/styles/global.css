@@ -1,35 +1,54 @@
 @import 'tailwindcss';
 
 :root {
-  --rr-bg: #eef2f4;
-  --rr-surface: #f9fbfc;
-  --rr-surface-2: #e7ecef;
-  --rr-text: #17212b;
-  --rr-muted: #5f6d78;
-  --rr-border: #d3dce1;
-  --rr-accent: #1d6f73;
-  --rr-accent-strong: #155a5d;
-  --rr-accent-soft: #dceff0;
-  --rr-warning: #a2671d;
+  color-scheme: light;
+  --rr-bg: #f4f6f9;
+  --rr-surface: #ffffff;
+  --rr-surface-2: #edf1f5;
+  --rr-text: #182230;
+  --rr-muted: #667487;
+  --rr-border: #dce3eb;
+  --rr-accent: #176c72;
+  --rr-accent-strong: #12575c;
+  --rr-accent-soft: #e0f2f2;
+  --rr-warning: #9b641c;
   --rr-danger: #a33a3a;
-  --rr-success: #2b7550;
-  --rr-shadow: 0 18px 45px rgba(27, 42, 52, 0.08);
+  --rr-success: #28734d;
+  --rr-shadow: 0 16px 38px rgba(24, 34, 48, 0.06);
+}
+
+[data-theme='blue'] {
+  color-scheme: light;
+  --rr-bg: #eef4ff;
+  --rr-surface: #ffffff;
+  --rr-surface-2: #e2ebfb;
+  --rr-text: #142745;
+  --rr-muted: #526783;
+  --rr-border: #cbd8ee;
+  --rr-accent: #2859bd;
+  --rr-accent-strong: #1e4698;
+  --rr-accent-soft: #dce8ff;
+  --rr-warning: #8b5d16;
+  --rr-danger: #a83242;
+  --rr-success: #23704a;
+  --rr-shadow: 0 16px 38px rgba(34, 66, 118, 0.09);
 }
 
 .dark {
-  --rr-bg: #11171c;
-  --rr-surface: #192126;
-  --rr-surface-2: #202b32;
-  --rr-text: #edf2f4;
-  --rr-muted: #a4b0b7;
-  --rr-border: #32404a;
-  --rr-accent: #79b6b4;
-  --rr-accent-strong: #9ccdcc;
-  --rr-accent-soft: #203a3c;
-  --rr-warning: #d5a15b;
-  --rr-danger: #e08a8a;
-  --rr-success: #74ba93;
-  --rr-shadow: 0 20px 50px rgba(0, 0, 0, 0.22);
+  color-scheme: dark;
+  --rr-bg: #141b24;
+  --rr-surface: #1c2632;
+  --rr-surface-2: #253343;
+  --rr-text: #ecf2fa;
+  --rr-muted: #a5b4c6;
+  --rr-border: #344457;
+  --rr-accent: #8bb7ff;
+  --rr-accent-strong: #a9caff;
+  --rr-accent-soft: #243a59;
+  --rr-warning: #e2b56d;
+  --rr-danger: #f0999d;
+  --rr-success: #82d3a5;
+  --rr-shadow: 0 20px 50px rgba(0, 0, 0, 0.24);
 }
 
 * {
@@ -46,7 +65,7 @@ body {
   background: var(--rr-bg);
   color: var(--rr-text);
   font-family:
-    'Inter',
+    Inter,
     ui-sans-serif,
     system-ui,
     -apple-system,
@@ -79,7 +98,7 @@ a {
 }
 
 .focus-ring:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--rr-accent) 48%, white);
+  outline: 3px solid color-mix(in srgb, var(--rr-accent) 52%, white);
   outline-offset: 2px;
 }
 
@@ -154,6 +173,15 @@ a {
   }
   82% {
     opacity: 0.45;
+  }
+}
+
+@media (max-width: 640px) {
+  body {
+    overflow-wrap: anywhere;
+  }
+  table {
+    font-size: 0.8125rem;
   }
 }
 

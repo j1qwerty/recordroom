@@ -52,6 +52,7 @@ import {
 } from './map';
 import type {
   Area,
+  Room,
   BarcodeSubject,
   DigitizationBatch,
   FileCreateInput,
@@ -175,6 +176,11 @@ const str = (value: unknown): string =>
 export const httpLocationsService: LocationsApi = {
   async listRooms() {
     return list(await get<Dto[]>('/api/locations/rooms'), toRoom);
+  },
+
+  async addRoom(input) {
+    const result = await attempt<Dto>('POST', '/api/locations/rooms', input);
+    return result.ok ? ok(toRoom(result.value)) : err<Room>(result.error, result.field);
   },
 
   async room(id) {

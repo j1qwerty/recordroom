@@ -431,7 +431,7 @@ export function NewFilePage() {
                         placeholder="e.g. EOFFICE/REV/2026/00123"
                       />
                     </Field>
-                    <Field label="Record kind" htmlFor="file-record-kind" required hint="A0 defaults to Map; choose File or Map explicitly when needed.">
+                    <Field label="Record kind" htmlFor="file-record-kind" required hint="A0 defaults to Map. Choose File explicitly when an A0 record is not a map.">
                       <SelectInput
                         id="file-record-kind"
                         value={form.recordKind ?? 'File'}

@@ -120,6 +120,14 @@ export interface AuthApi {
 
 // --------------------------------------------------------------- location api
 
+export interface RoomInput {
+  code: string;
+  name: string;
+  building?: string;
+  floor?: string;
+  capacity?: number;
+}
+
 export interface SectionInput {
   name: string;
   status?: StorageStatus;
@@ -146,6 +154,7 @@ export interface ShelfInput {
 
 export interface LocationsApi {
   listRooms(): Promise<Room[]>;
+  addRoom(input: RoomInput): Promise<Result<Room>>;
   room(id: string): Promise<Room | null>;
   sectionsOf(roomId: string): Promise<Section[]>;
   unitsOf(sectionId: string): Promise<StorageUnit[]>;

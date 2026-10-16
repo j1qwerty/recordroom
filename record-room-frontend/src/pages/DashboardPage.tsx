@@ -1,32 +1,23 @@
 import {
   Archive,
   ArrowRight,
-  CheckCircle,
   Clock,
   Files,
-  MagnifyingGlass,
   MapPin,
+  MagnifyingGlass,
   WarningCircle,
+  CheckCircle,
+  Buildings,
 } from '@phosphor-icons/react';
 import { Link } from 'react-router-dom';
-import { PretextMasonry } from '../components/PretextMasonry';
 import { Card } from '../components/ui/Card';
 import { LinkButton } from '../components/ui/Button';
-import { StatCard } from '../components/ui/StatCard';
-import { SectionHeader } from '../components/ui/SectionHeader';
-import { DecorativeField } from '../components/DecorativeField';
-import { RoomMap } from '../components/RoomMap';
-import { useQuery, useService } from '../hooks/useService';
-import { galleryItems } from '../data/mock';
+import { useQuery, useService, useSession } from '../hooks/useService';
 import { formatNumber } from '../lib/utils';
 import type { DashboardStats, IssueRecord, TimelineEvent } from '../types';
 import type { Page } from '../services/contracts';
 import type { Channel } from '../services/realtime';
 
-/**
- * Placeholders for the first paint. Every figure on this page comes from the
- * API, so nothing here may claim a number the service has not reported yet.
- */
 const EMPTY_STATS: DashboardStats = {
   totalRecords: 0,
   mappedPercent: 0,
@@ -41,276 +32,204 @@ const EMPTY_STATS: DashboardStats = {
 const EMPTY_TIMELINE: TimelineEvent[] = [];
 const EMPTY_ISSUES: IssueRecord[] = [];
 const EMPTY_FILE_PAGE: Page<never> = { items: [], total: 0, page: 1, pageSize: 1 };
-
-/**
- * The dashboard is derived from every channel, so a write anywhere must move
- * these cards. Declared once at module scope: the hook keys on the joined names,
- * but a stable constant keeps the intent obvious.
- */
 const DASHBOARD_CHANNELS: Channel[] = ['files', 'issues', 'movements', 'digitization'];
+
+const metrics = [
+  { key: 'records', label: 'Registered records', icon: Files },
+  { key: 'mapped', label: 'Shelf mapped', icon: MapPin },
+  { key: 'issued', label: 'Currently issued', icon: Clock },
+  { key: 'digitization', label: 'Digitization approved', icon: Archive },
+] as const;
 
 export function DashboardPage() {
   const service = useService();
-
-  const { data: stats } = useQuery(
-    () => service.dashboard.stats(),
-    [],
-    EMPTY_STATS,
-    DASHBOARD_CHANNELS,
-  );
-  const { data: activity } = useQuery(() => service.dashboard.activity(5), [], EMPTY_TIMELINE, [
-    'movements',
-  ]);
+  const { user, allowed } = useSession();
+  const { data: stats } = useQuery(() => service.dashboard.stats(), [], EMPTY_STATS, DASHBOARD_CHANNELS);
+  const { data: activity } = useQuery(() => service.dashboard.activity(6), [], EMPTY_TIMELINE, ['movements']);
   const { data: overdue } = useQuery(() => service.issues.overdue(), [], EMPTY_ISSUES, ['issues']);
+  const { data: occupancy } = useQuery(() => service.locations.occupancy(), [], [], ['locations', 'files']);
+  const { data: registry } = useQuery(() => service.files.list({ pageSize: 1 }), [], EMPTY_FILE_PAGE);
 
-  // One read feeds both the footprint panel and the utilisation list. The API
-  // owns the room/section/almirah counts, so they are read from its roll-up
-  // rather than from a client-side snapshot.
-  const { data: occupancy } = useQuery(
-    () => service.locations.occupancy(),
-    [],
-    [],
-    ['locations', 'files'],
-  );
   const rooms = occupancy.map((entry) => ({
     ...entry.room,
     sectionCount: entry.sections.length,
-    almirahCount: entry.sections.reduce((sum, row) => sum + row.almirahs, 0),
+    almirahCount: entry.sections.reduce((sum, section) => sum + section.almirahs, 0),
+    shelfCount: entry.sections.reduce((sum, section) => sum + section.shelves, 0),
   }));
-  const firstRoom = rooms[0];
-
-  // The "loaded in this browser" note used to count rows in the local snapshot.
-  // Under the HTTP adapter that snapshot is empty, so the registry's own row
-  // count is the honest replacement.
-  const { data: registry } = useQuery(
-    () => service.files.list({ pageSize: 1 }),
-    [],
-    EMPTY_FILE_PAGE,
-  );
+  const values: Record<(typeof metrics)[number]['key'], string> = {
+    records: formatNumber(stats.totalRecords),
+    mapped: `${stats.mappedPercent}%`,
+    issued: formatNumber(stats.issuedNow),
+    digitization: `${stats.digitizationPercent}%`,
+  };
+  const notes: Record<(typeof metrics)[number]['key'], string> = {
+    records: `${formatNumber(registry.collectionTotal ?? registry.total)} in the registry`,
+    mapped: `${stats.roomCount} rooms in the location register`,
+    issued: `${stats.dueToday} due today`,
+    digitization: `${stats.pendingApprovals} pages awaiting review`,
+  };
 
   return (
-    <div className="space-y-10">
-      <section className="relative overflow-hidden rounded-3xl border border-base bg-[var(--rr-surface)] p-6 shadow-sm md:p-8 lg:p-10">
-        <DecorativeField variant={2} className="-right-8 -top-10 w-56" />
-        <DecorativeField variant={7} className="bottom-0 left-0 w-40 opacity-25" />
-        <div className="relative grid gap-8 lg:grid-cols-[1.1fr_.9fr] lg:items-center">
-          <div>
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-base bg-[var(--rr-bg)] px-3 py-1.5 text-xs font-bold uppercase tracking-[0.12em] text-accent">
-              <span className="size-2 rounded-full bg-emerald-500" /> Live operations view
-            </div>
-            <h1 className="max-w-4xl text-4xl font-semibold tracking-[-0.05em] md:text-6xl">
-              Know the record. Know the room. Know the history.
-            </h1>
-            <p className="muted mt-5 max-w-2xl text-base leading-7">
-              A unified operational view of physical files, digital copies, locations, issue/return
-              activity and digitization progress.
-            </p>
-            <div className="mt-7 flex flex-wrap gap-3">
-              <LinkButton to="/search" icon={<MagnifyingGlass size={18} />}>
-                Search records
-              </LinkButton>
-              <LinkButton to="/rooms" variant="ghost" icon={<MapPin size={18} />}>
-                Explore rooms
-              </LinkButton>
-            </div>
-          </div>
-          {firstRoom && (
-            <div className="surface-flat relative overflow-hidden rounded-2xl p-4">
-              <div className="mb-3 flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold">Current record-room footprint</p>
-                  <p className="muted text-xs">
-                    {firstRoom.building} · {firstRoom.floor} · {rooms.length} rooms mapped
-                  </p>
+    <div className="space-y-7">
+      <section className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm font-medium text-accent">Record Room</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Overview</h1>
+          <p className="muted mt-2 max-w-2xl text-sm leading-6">
+            Track registered files, physical locations, issue and return activity, and digitization work.
+          </p>
+          {user && <p className="muted mt-2 text-xs">Signed in as {user.displayName || user.userName} · {user.role}</p>}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <LinkButton to="/search" variant="secondary" icon={<MagnifyingGlass size={17} />}>Search records</LinkButton>
+          {allowed('files.create') && <LinkButton to="/files/new" icon={<Files size={17} />}>Add file</LinkButton>}
+        </div>
+      </section>
+
+      <section aria-label="Registry statistics" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {metrics.map((metric) => {
+          const Icon = metric.icon;
+          return (
+            <Card key={metric.key} className="min-w-0">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="muted text-sm">{metric.label}</p>
+                  <p className="mt-3 text-2xl font-semibold tabular-nums tracking-tight">{values[metric.key]}</p>
                 </div>
-                <span className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-semibold text-accent">
-                  {Math.round((firstRoom.occupancy / firstRoom.capacity) * 100)}% mapped
+                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent-soft text-accent">
+                  <Icon size={21} />
                 </span>
               </div>
-              <RoomMap room={firstRoom} compact />
-            </div>
+              <p className="muted mt-3 text-xs">{notes[metric.key]}</p>
+            </Card>
+          );
+        })}
+      </section>
+
+      {(overdue.length > 0 || stats.pendingApprovals > 0) && (
+        <section className="grid gap-3 md:grid-cols-2" aria-label="Needs attention">
+          {overdue.length > 0 && (
+            <Link to="/return" className="focus-ring rounded-xl border border-[color-mix(in_srgb,var(--rr-danger)_36%,var(--rr-border))] bg-[var(--rr-surface)] p-4 transition hover:bg-[var(--rr-surface-2)]">
+              <div className="flex items-start gap-3">
+                <WarningCircle size={22} className="mt-0.5 shrink-0 text-[var(--rr-danger)]" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">{overdue.length} overdue receipt{overdue.length === 1 ? '' : 's'}</p>
+                  <p className="muted mt-1 text-xs leading-5">Review returns and update the custody record.</p>
+                </div>
+                <ArrowRight size={17} className="muted" />
+              </div>
+            </Link>
           )}
-        </div>
-      </section>
-
-      <section>
-        <SectionHeader
-          eyebrow="System pulse"
-          title="Today at a glance"
-          description="Aggregated from the same collections the desks write to, so these numbers cannot drift from the tables."
-        />
-      </section>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Physical records"
-          value={formatNumber(stats.totalRecords)}
-          note={`${formatNumber(registry.collectionTotal ?? registry.total)} indexed in the registry`}
-          icon={<Files size={22} />}
-        />
-        <StatCard
-          label="Mapped to a shelf"
-          value={`${stats.mappedPercent}%`}
-          note={`${stats.roomCount} rooms · sections and almirahs mapped`}
-          icon={<MapPin size={22} />}
-        />
-        <StatCard
-          label="Issued now"
-          value={formatNumber(stats.issuedNow)}
-          note={`${stats.dueToday} receipt(s) due or overdue`}
-          tone="warning"
-          icon={<Clock size={22} />}
-        />
-        <StatCard
-          label="Digitization approved"
-          value={`${stats.digitizationPercent}%`}
-          note={`${stats.pendingApprovals} page(s) awaiting review`}
-          icon={<Archive size={22} />}
-        />
-      </div>
-
-      {overdue.length > 0 && (
-        <div className="flex flex-col gap-4 rounded-2xl border border-[color-mix(in_srgb,var(--rr-danger)_40%,transparent)] p-5 md:flex-row md:items-center md:justify-between">
-          <div className="flex gap-3">
-            <WarningCircle size={22} className="mt-0.5 shrink-0 text-[var(--rr-danger)]" />
-            <div>
-              <p className="text-sm font-semibold">
-                {overdue.length} receipt(s) overdue · {stats.activeBorrowers} active borrower(s)
-              </p>
-              <p className="muted mt-1 text-sm leading-6">
-                {overdue
-                  .slice(0, 3)
-                  .map(
-                    (issue) => `${issue.receiptNumber} (${issue.borrowerName}, due ${issue.dueAt})`,
-                  )
-                  .join(' · ')}
-              </p>
-            </div>
-          </div>
-          <Link to="/return" className="focus-ring text-xs font-semibold text-accent">
-            Open the return desk
-          </Link>
-        </div>
+          {stats.pendingApprovals > 0 && (
+            <Link to="/digitization" className="focus-ring rounded-xl border border-base bg-[var(--rr-surface)] p-4 transition hover:bg-[var(--rr-surface-2)]">
+              <div className="flex items-start gap-3">
+                <Clock size={22} className="mt-0.5 shrink-0 text-accent" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">{stats.pendingApprovals} page{stats.pendingApprovals === 1 ? '' : 's'} waiting for review</p>
+                  <p className="muted mt-1 text-xs leading-5">Open digitization to review submitted scans.</p>
+                </div>
+                <ArrowRight size={17} className="muted" />
+              </div>
+            </Link>
+          )}
+        </section>
       )}
 
-      <section className="grid gap-5 xl:grid-cols-[1.1fr_.9fr]">
-        <Card>
-          <div className="mb-5 flex items-center justify-between">
+      <section className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
+        <Card padding={false} className="overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-base p-5">
             <div>
-              <p className="text-sm font-semibold">Room utilization</p>
-              <p className="muted mt-1 text-xs">Occupancy across mapped storage areas</p>
+              <h2 className="text-base font-semibold">Physical locations</h2>
+              <p className="muted mt-1 text-xs">Rooms and storage capacity at a glance</p>
             </div>
-            <Link className="text-xs font-semibold text-accent" to="/rooms">
-              View all
-            </Link>
+            <Link to="/admin/locations" className="focus-ring text-sm font-semibold text-accent">Manage locations</Link>
           </div>
-          <div className="space-y-4">
-            {rooms.map((room) => (
-              <Link
-                key={room.id}
-                to={`/rooms/${room.id}`}
-                className="block rounded-xl border border-base p-4 transition hover:bg-[var(--rr-surface-2)]"
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-semibold">
-                      {room.code} · {room.name}
-                    </p>
-                    <p className="muted mt-1 text-xs">
-                      {room.building} · {room.floor} · {room.sectionCount} sections ·{' '}
-                      {room.almirahCount} almirahs
-                    </p>
-                  </div>
-                  <p className="text-sm font-semibold">
-                    {Math.round((room.occupancy / room.capacity) * 100)}%
-                  </p>
-                </div>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-[var(--rr-surface-2)]">
-                  <div
-                    className="h-full rounded-full bg-[var(--rr-accent)]"
-                    style={{ width: `${(room.occupancy / room.capacity) * 100}%` }}
-                  />
-                </div>
-              </Link>
-            ))}
-          </div>
+          {rooms.length === 0 ? (
+            <div className="p-7 text-center">
+              <Buildings size={26} className="mx-auto text-accent" />
+              <p className="mt-3 text-sm font-semibold">No rooms configured</p>
+              <p className="muted mt-1 text-xs">Add a room to map the physical storage structure.</p>
+              {allowed('locations.edit') && <Link to="/admin/locations" className="mt-3 inline-flex text-sm font-semibold text-accent">Add room <ArrowRight size={15} className="ml-1" /></Link>}
+            </div>
+          ) : (
+            <div className="divide-y divide-[var(--rr-border)]">
+              {rooms.slice(0, 6).map((room) => {
+                const percent = room.capacity > 0 ? Math.min(100, Math.round((room.occupancy / room.capacity) * 100)) : 0;
+                return (
+                  <Link key={room.id} to={`/rooms/${room.id}`} className="focus-ring block p-4 transition hover:bg-[var(--rr-bg)] sm:px-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold">{room.code} <span className="font-normal muted">· {room.name}</span></p>
+                        <p className="muted mt-1 text-xs">{[room.building, room.floor].filter(Boolean).join(' · ') || 'Location details not set'} · {room.sectionCount} sections · {room.almirahCount} almirahs</p>
+                      </div>
+                      <span className="shrink-0 text-xs font-semibold tabular-nums">{percent}%</span>
+                    </div>
+                    <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[var(--rr-surface-2)]">
+                      <div className="h-full rounded-full bg-[var(--rr-accent)]" style={{ width: `${percent}%` }} />
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
         </Card>
-        <Card>
-          <div className="mb-5 flex items-center justify-between">
+
+        <Card padding={false} className="overflow-hidden">
+          <div className="flex items-center justify-between gap-3 border-b border-base p-5">
             <div>
-              <p className="text-sm font-semibold">Operational activity</p>
-              <p className="muted mt-1 text-xs">Latest movement events</p>
+              <h2 className="text-base font-semibold">Recent activity</h2>
+              <p className="muted mt-1 text-xs">Latest recorded changes</p>
             </div>
-            <Link className="text-xs font-semibold text-accent" to="/movement">
-              Movement log
-            </Link>
+            <Link to="/movement" className="focus-ring text-sm font-semibold text-accent">View all</Link>
           </div>
-          <div className="space-y-4">
-            {activity.map((event) => (
-              <div key={event.id} className="flex gap-3">
-                <div className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
-                  <CheckCircle size={16} />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold">{event.label}</p>
-                    <span className="text-[10px] muted">{event.date}</span>
+          {activity.length === 0 ? (
+            <p className="muted p-5 text-sm">No recent activity to show.</p>
+          ) : (
+            <ol className="divide-y divide-[var(--rr-border)]">
+              {activity.map((event) => (
+                <li key={event.id} className="flex gap-3 p-4 sm:px-5">
+                  <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent">
+                    <CheckCircle size={17} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                      <p className="text-sm font-medium">{event.label}</p>
+                      <span className="muted text-xs">{event.date}</span>
+                    </div>
+                    <p className="muted mt-1 text-xs leading-5">{event.detail}</p>
+                    <p className="mt-1 text-xs text-accent">{event.actor}</p>
                   </div>
-                  <p className="muted mt-0.5 text-xs">{event.detail}</p>
-                  <p className="mt-1 text-[10px] text-accent">{event.actor}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+                </li>
+              ))}
+            </ol>
+          )}
         </Card>
       </section>
 
       <section>
-        <SectionHeader
-          eyebrow="Knowledge surface"
-          title="Operational patterns"
-          description="A small editorial layer for training, implementation updates and record-room insights."
-        />
-      </section>
-      <PretextMasonry
-        items={galleryItems}
-        columnWidth={320}
-        gap={20}
-        getItemText={(item) => `${item.title} ${item.text}`}
-        getItemMeta={(item) => ({ headerText: item.title, extraHeight: 120, imageHeight: 80 })}
-        renderItem={(item) => (
-          <article className="overflow-hidden rounded-2xl border border-base bg-[var(--rr-surface)] p-5">
-            <div className="mb-4 h-20 rounded-xl bg-gradient-to-br from-[var(--rr-surface-2)] to-accent-soft">
-              <div className="h-full p-4">
-                <div className="h-1 w-16 rounded-full bg-[var(--rr-accent)]/45" />
-                <div className="mt-3 h-1 w-28 rounded-full bg-[var(--rr-accent)]/20" />
-              </div>
-            </div>
-            <p className="text-xs font-bold uppercase tracking-[0.12em] text-accent">Field note</p>
-            <h3 className="mt-2 text-lg font-semibold tracking-tight">{item.title}</h3>
-            <p className="muted mt-2 text-sm leading-6">{item.text}</p>
-            <Link
-              to="/reports"
-              className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-accent"
-            >
-              Open related report <ArrowRight size={14} />
-            </Link>
-          </article>
-        )}
-        className="w-full"
-      />
-      <div className="rounded-2xl border border-base bg-accent-soft p-5">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-sm font-semibold">Need help with a physical record?</p>
-            <p className="muted mt-1 text-sm">
-              Scan a barcode or enter a file ID to get the current physical path.
-            </p>
-          </div>
-          <LinkButton to="/scan" variant="secondary" icon={<MagnifyingGlass size={17} />}>
-            Open the scanner
-          </LinkButton>
+        <h2 className="text-base font-semibold">Common tasks</h2>
+        <p className="muted mt-1 text-sm">Go straight to the desk you need.</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            { title: 'Find a record', detail: 'Search by barcode or subject', href: '/search', icon: MagnifyingGlass, permission: 'files.view' as const },
+            { title: 'Issue a file', detail: 'Record a file handover', href: '/issue', icon: Files, permission: 'issue.issue' as const },
+            { title: 'Return a file', detail: 'Close an open receipt', href: '/return', icon: Clock, permission: 'issue.return' as const },
+            { title: 'View map uploads', detail: 'Open scanned maps and copies', href: '/admin/maps', icon: MapPin, permission: 'files.view' as const },
+          ].filter((action) => allowed(action.permission)).map((action) => {
+            const Icon = action.icon;
+            return (
+              <Link key={action.href} to={action.href} className="focus-ring flex items-center gap-3 rounded-xl border border-base bg-[var(--rr-surface)] p-4 transition hover:bg-[var(--rr-surface-2)]">
+                <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent"><Icon size={20} /></span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold">{action.title}</span>
+                  <span className="muted mt-1 block text-xs">{action.detail}</span>
+                </span>
+                <ArrowRight size={16} className="muted shrink-0" />
+              </Link>
+            );
+          })}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

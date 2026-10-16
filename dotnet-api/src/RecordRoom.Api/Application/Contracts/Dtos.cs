@@ -88,6 +88,7 @@ public sealed record RoomDto(
     SectionDto[] Sections,
     StorageUnitDto[] StorageUnits);
 
+public sealed record RoomInput(string Code, string Name, string? Building = null, string? Floor = null, int Capacity = 100);
 public sealed record SectionInput(string Name, string? Status = null);
 public sealed record AlmirahInput(
     string Code,
