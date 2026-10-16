@@ -405,7 +405,7 @@ export function NewFilePage() {
                             ...current,
                             fileType,
                             ...(!recordKindManuallySet
-                              ? { recordKind: fileType === 'Map' || current.documentSize === 'A0' ? 'Map' : 'File' }
+                              ? { recordKind: fileType === 'Map' ? 'Map' : 'File' }
                               : {}),
                           }));
                         }}
@@ -431,7 +431,7 @@ export function NewFilePage() {
                         placeholder="e.g. EOFFICE/REV/2026/00123"
                       />
                     </Field>
-                    <Field label="Record kind" htmlFor="file-record-kind" required hint="A0 defaults to Map; choose File or Map explicitly when needed.">
+                    <Field label="Record kind" htmlFor="file-record-kind" required hint="Choose File or Map as the record kind. Document size is stored separately.">
                       <SelectInput
                         id="file-record-kind"
                         value={form.recordKind ?? 'File'}
@@ -453,9 +453,6 @@ export function NewFilePage() {
                           setDraft((current) => ({
                             ...current,
                             documentSize: size,
-                            ...(!recordKindManuallySet
-                              ? { recordKind: size === 'A0' || current.fileType === 'Map' ? 'Map' : 'File' }
-                              : {}),
                           }));
                         }}
                       >
