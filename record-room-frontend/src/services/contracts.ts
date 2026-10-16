@@ -28,6 +28,8 @@ import type {
   Employee,
   FileCreateInput,
   FileStatus,
+  FileType,
+  RecordKind,
   IssueRecord,
   LoginHistoryEntry,
   MapUpload,
@@ -179,6 +181,8 @@ export interface FileQuery {
   search?: string;
   department?: string;
   status?: FileStatus | 'All';
+  recordKind?: RecordKind | 'All';
+  fileType?: FileType | 'All';
   roomId?: string;
   sectionId?: string;
   shelfId?: string;
