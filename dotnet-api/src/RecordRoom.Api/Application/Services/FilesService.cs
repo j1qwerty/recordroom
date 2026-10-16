@@ -62,7 +62,7 @@ public sealed class FilesService(
     private static FileDto ToDto(RecordFile f, Section? section, StorageUnit? unit, Room? room) => new(
         f.Id, f.Barcode, f.FileNumber, f.Subject, f.Department, f.Year,
         Display.FileKind(f.FileKind), Display.Record(f.Status), f.LocationDisplay,
-        f.RoomId, section?.Code ?? string.Empty, unit?.Code ?? string.Empty,
+        f.RoomId, f.SectionId, f.AlmirahId, f.ShelfId, section?.Code ?? string.Empty, unit?.Code ?? string.Empty,
         f.Shelf?.Code ?? string.Empty, f.ShelfBarcode, f.ApproxPosition,
         f.Pincode, f.Area, f.PropertyNo, f.PropertyArea, f.Dealer, f.CodalLife,
         f.CreatedAt, f.CreatedBy, f.UpdatedAt, f.UpdatedBy, Stamp(f.LastMovementAt),
@@ -260,8 +260,9 @@ public sealed class FilesService(
             Department = input.Department.Trim(),
             Year = input.Year,
             FileKind = ParseKind(input.FileType),
-            RecordKind = string.Equals(input.RecordKind, "Map", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(input.DocumentSize, "A0", StringComparison.OrdinalIgnoreCase) ? "Map" : "File",
+            RecordKind = input.RecordKind is null
+                ? (string.Equals(input.DocumentSize, "A0", StringComparison.OrdinalIgnoreCase) ? "Map" : "File")
+                : (string.Equals(input.RecordKind, "Map", StringComparison.OrdinalIgnoreCase) ? "Map" : "File"),
             DocumentSize = input.DocumentSize is "A0" or "A1" or "A2" or "A3" or "A4" ? input.DocumentSize : "Other",
             Status = RecordStatus.Available,
             RoomId = room.Id,
