@@ -154,6 +154,8 @@ export interface RecordFile {
   recordKind?: RecordKind;
   /** Physical sheet/document size; A0 records default to Map at creation time. */
   documentSize?: DocumentSize;
+  /** Optional e-office file name or identifier assigned by the external record system. */
+  eOfficeReference?: string;
   status: FileStatus;
   location: string;
   roomId: string;
@@ -190,6 +192,7 @@ export interface FileCreateInput {
   fileType: FileType;
   recordKind?: RecordKind;
   documentSize?: DocumentSize;
+  eOfficeReference?: string;
   shelfId: string;
   position: number;
   pincode: string;
