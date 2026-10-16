@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import {
   Buildings,
   FloppyDisk,
@@ -32,7 +32,7 @@ type Dialog =
   | null;
 
 /**
- * Location designer for the full room â†’ section â†’ almirah â†’ shelf hierarchy.
+ * Location designer for the full room … section … almirah … shelf hierarchy.
  *
  * The `section` level was missing from the frontend even though the legacy
  * `Store_model.php` treated it as a first-class guard: a section cannot be
@@ -134,7 +134,7 @@ export function LocationsPage() {
       <PageHeader
         kicker="Physical configuration"
         title="Location designer"
-        description="Room â†’ section â†’ almirah â†’ shelf. Every parent has to be empty before it can be removed, and only active shelves accept new files."
+        description="Room … section … almirah … shelf. Every parent has to be empty before it can be removed, and only active shelves accept new files."
         actions={
           allowed('locations.edit') && (
             <Button icon={<FloppyDisk size={17} />} onClick={saveLayout}>

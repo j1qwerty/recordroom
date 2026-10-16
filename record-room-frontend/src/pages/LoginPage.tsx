@@ -1,4 +1,4 @@
-﻿import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import {
   Archive,
@@ -30,7 +30,7 @@ const DEMO_ACCOUNTS: Array<{ userName: string; role: string; note: string }> = [
 /**
  * Sign-in surface covering the four legacy entry points:
  * `login_process` (web), OTP mobile login, employee PIN and the
- * `forgotpassword â†’ enterotp â†’ recoverpassword` reset chain.
+ * `forgotpassword … enterotp … recoverpassword` reset chain.
  */
 export function LoginPage() {
   const service = useService();

@@ -110,7 +110,11 @@ export function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose:
       )}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 flex w-[276px] flex-col border-r border-base bg-[var(--rr-surface)] transition-transform duration-200 lg:static lg:z-auto lg:translate-x-0',
+          // Pinned on desktop so a long page (the permission matrix, the registry)
+          // does not drag the navigation and the session footer off screen. The
+          // nav's own `overflow-y-auto` only becomes meaningful once the aside has
+          // a definite height, which is what `lg:h-dvh` gives it.
+          'fixed inset-y-0 left-0 z-50 flex w-[276px] flex-col border-r border-base bg-[var(--rr-surface)] transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:h-dvh lg:shrink-0 lg:translate-x-0',
           mobileOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >

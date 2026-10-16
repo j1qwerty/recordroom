@@ -1,5 +1,5 @@
-﻿import { useState } from 'react';
-import { Plus, ShieldCheck, Trash, UserCircle } from '@phosphor-icons/react';
+import { useState } from 'react';
+import { Check, Plus, ShieldCheck, Trash, UserCircle } from '@phosphor-icons/react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -188,7 +188,12 @@ export function UsersPage() {
                   {roles.map((role) => (
                     <td key={role} className="px-3 py-2 text-center">
                       {can(role as Role, permission) ? (
-                        <span className="text-[var(--rr-success)]">â—</span>
+                        <Check
+                          size={14}
+                          weight="bold"
+                          className="inline text-[var(--rr-success)]"
+                          aria-label="granted"
+                        />
                       ) : (
                         <span className="muted">—</span>
                       )}
