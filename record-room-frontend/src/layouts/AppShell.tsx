@@ -18,6 +18,12 @@ export function AppShell() {
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => {
+    const openPalette = () => setPaletteOpen(true);
+    window.addEventListener('rr:open-command-palette', openPalette);
+    return () => window.removeEventListener('rr:open-command-palette', openPalette);
+  }, []);
+
+  useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     document.documentElement.classList.toggle('dark', theme === 'dark');
     localStorage.setItem('rr-theme', theme);
