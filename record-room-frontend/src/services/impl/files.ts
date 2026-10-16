@@ -149,6 +149,13 @@ export const filesService: FilesApi = {
     if (!Number.isFinite(input.year) || input.year < 1800 || input.year > 2200) {
       issues.push({ field: 'year', message: 'Enter a four-digit year.', severity: 'error' });
     }
+    if ((input.eOfficeReference?.trim().length ?? 0) > 200) {
+      issues.push({
+        field: 'eOfficeReference',
+        message: 'E-office reference must be 200 characters or fewer.',
+        severity: 'error',
+      });
+    }
 
     // checkShelfBarcode: the shelf must exist and be usable.
     const shelf = await locationsService.findShelf(input.shelfId);
