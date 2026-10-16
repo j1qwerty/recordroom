@@ -12,7 +12,7 @@ import { useQuery, useService } from '../hooks/useService';
 import type { MapUpload, RecordFile } from '../types';
 
 /**
- * `upload_map` â€” scanned maps and file copies.
+ * `upload_map` — scanned maps and file copies.
  *
  * Legacy `viewmap` / `viewfilecopy` screens listed these rows against the
  * registry. A new scan of the same file and page becomes the next version and
@@ -79,7 +79,7 @@ export function MapsPage() {
             <TextInput
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Barcode, file name or statusâ€¦"
+              placeholder="Barcode, file name or status…"
               className="pl-10"
               aria-label="Search map uploads"
             />
@@ -161,7 +161,7 @@ export function MapsPage() {
         <MapForm
           candidates={grouped.map((file) => ({
             barcode: file.fileBarcode,
-            label: `${file.fileBarcode} Â· ${file.subject}`,
+            label: `${file.fileBarcode} · ${file.subject}`,
           }))}
           onSubmit={async (input) => {
             const result = await service.uploads.addMap(input);

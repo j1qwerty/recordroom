@@ -28,6 +28,8 @@ import type {
   Employee,
   FileCreateInput,
   FileStatus,
+  FileType,
+  RecordKind,
   IssueRecord,
   LoginHistoryEntry,
   MapUpload,
@@ -179,6 +181,9 @@ export interface FileQuery {
   search?: string;
   department?: string;
   status?: FileStatus | 'All';
+  recordKind?: RecordKind | 'All';
+  fileType?: FileType | 'All';
+  eOfficeStatus?: 'All' | 'Linked' | 'Not linked';
   roomId?: string;
   sectionId?: string;
   shelfId?: string;
@@ -203,6 +208,7 @@ export interface FilesApi {
     position: number,
     reason: string,
   ): Promise<Result<RecordFile>>;
+  updateEOfficeReference(fileId: string, reference: string): Promise<Result<RecordFile>>;
   remove(fileId: string): Promise<Result<true>>;
 }
 

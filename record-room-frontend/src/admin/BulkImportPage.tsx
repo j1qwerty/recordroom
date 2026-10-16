@@ -176,7 +176,7 @@ export function BulkImportPage() {
                 <div>
                   <p className="text-sm font-semibold">{job.filename}</p>
                   <p className="muted mt-1 text-xs">
-                    {job.folder} Â· {job.createdAt} Â· {job.status}
+                    {job.folder} · {job.createdAt} · {job.status}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -271,7 +271,7 @@ export function BulkImportPage() {
                       <div>
                         <p className="text-sm font-semibold">{item.filename}</p>
                         <p className="muted mt-0.5 text-[11px]">
-                          {item.createdAt} Â· {item.createdBy} Â· {item.status}
+                          {item.createdAt} · {item.createdBy} · {item.status}
                         </p>
                       </div>
                     </div>

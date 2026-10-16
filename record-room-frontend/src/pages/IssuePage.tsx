@@ -21,6 +21,7 @@ import type { Employee, RecordFile } from '../types';
 import type { BorrowerRow, Page } from '../services/contracts';
 
 const EMPTY_EMPLOYEES: Page<Employee> = { items: [], total: 0, page: 1, pageSize: 100 };
+const EMPTY_FILES: Page<RecordFile> = { items: [], total: 0, page: 1, pageSize: 8 };
 
 /**
  * Scanner-first multi-file issue desk.
@@ -34,6 +35,8 @@ export function IssuePage() {
   const { allowed } = useSession();
 
   const [scan, setScan] = useState('');
+  const [fileSearch, setFileSearch] = useState('');
+  const [employeeSearch, setEmployeeSearch] = useState('');
   const [cart, setCart] = useState<RecordFile[]>([]);
   const [borrowerType, setBorrowerType] = useState<'Employee' | 'Depositor'>('Employee');
   const [employeeCode, setEmployeeCode] = useState('');
@@ -49,12 +52,19 @@ export function IssuePage() {
   // Employees and the borrower roll-up both live in the API now, so they are
   // asked for rather than derived from a local snapshot.
   const { data: employeePage } = useQuery(
-    () => service.employees.list({ pageSize: 100, status: 'Active' }),
-    [],
+    () => service.employees.list({ search: employeeSearch, pageSize: 100, status: 'Active' }),
+    [employeeSearch],
     EMPTY_EMPLOYEES,
   );
   const employees = employeePage.items;
   const employee = employees.find((item) => item.employeeCode === employeeCode);
+  const { data: fileSearchPage } = useQuery(
+    () => fileSearch.trim().length >= 2
+      ? service.files.list({ search: fileSearch.trim(), status: 'Available', pageSize: 8 })
+      : Promise.resolve(EMPTY_FILES),
+    [fileSearch],
+    EMPTY_FILES,
+  );
 
   const { data: nextReceipt, reload: reloadReceipt } = useQuery(
     () => service.issues.nextReceiptNumber(),
@@ -204,9 +214,52 @@ export function IssuePage() {
               />
             </form>
             <p className="muted mt-2 text-xs">
-              A USB scanner types like a keyboard and Enter submits. Scan continuously for a
-              multi-file requisition.
+              A USB scanner types like a keyboard and Enter submits. You can also search by barcode,
+              file number, subject or location and add a matching available record.
             </p>
+            <div className="mt-4">
+              <TextInput
+                value={fileSearch}
+                onChange={(event) => setFileSearch(event.target.value)}
+                placeholder="Search available files by subject, number or barcode"
+                aria-label="Search available files to issue"
+              />
+              {fileSearch.trim().length >= 2 && (
+                <div className="mt-2 overflow-hidden rounded-xl border border-base">
+                  {fileSearchPage.items.length === 0 ? (
+                    <p className="muted p-3 text-xs">No available files match this search.</p>
+                  ) : fileSearchPage.items.map((file) => {
+                    const alreadyAdded = cart.some((item) => item.id === file.id);
+                    const kind = file.recordKind ?? (file.documentSize === 'A0' || file.fileType === 'Map' ? 'Map' : 'File');
+                    return (
+                      <div key={file.id} className="flex items-center justify-between gap-3 border-b border-base p-3 last:border-b-0">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-mono text-xs font-semibold text-accent">{file.fileBarcode}</span>
+                            <Badge tone={kind === 'Map' ? 'info' : 'neutral'}>{kind}</Badge>
+                          </div>
+                          <p className="mt-1 truncate text-sm font-medium">{file.subject}</p>
+                          <p className="muted mt-0.5 text-[11px]">{file.fileNumber} · {file.location}</p>
+                          <p className="muted mt-1 text-[11px]">E-office: {file.eOfficeReference?.trim() || 'Not linked'}</p>
+                        </div>
+                        <Button
+                          className="min-h-8 px-3 text-xs"
+                          variant="ghost"
+                          disabled={alreadyAdded}
+                          onClick={() => {
+                            setCart((current) => current.some((item) => item.id === file.id) ? current : [...current, file]);
+                            setError(null);
+                            setFileSearch('');
+                          }}
+                        >
+                          {alreadyAdded ? 'Added' : 'Add'}
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             <div className="mt-5">
               {cart.length === 0 ? (
@@ -229,6 +282,7 @@ export function IssuePage() {
                         </p>
                         <p className="mt-1 truncate text-sm font-semibold">{file.subject}</p>
                         <p className="muted mt-0.5 text-[11px]">{file.location}</p>
+                        <p className="muted mt-1 text-[11px]">E-office: {file.eOfficeReference?.trim() || 'Not linked'}</p>
                       </div>
                       <button
                         type="button"
@@ -274,7 +328,16 @@ export function IssuePage() {
             </Field>
 
             {borrowerType === 'Employee' ? (
-              <Field label="Employee" htmlFor="issue-employee" required>
+              <div className="space-y-2">
+                <Field label="Find employee" htmlFor="issue-employee-search">
+                  <TextInput
+                    id="issue-employee-search"
+                    value={employeeSearch}
+                    onChange={(event) => setEmployeeSearch(event.target.value)}
+                    placeholder="Search by employee name, code or department"
+                  />
+                </Field>
+                <Field label="Employee" htmlFor="issue-employee" required>
                 <SelectInput
                   id="issue-employee"
                   value={employeeCode}
@@ -287,7 +350,8 @@ export function IssuePage() {
                     </option>
                   ))}
                 </SelectInput>
-              </Field>
+                </Field>
+              </div>
             ) : (
               <Field
                 label="Depositor code"

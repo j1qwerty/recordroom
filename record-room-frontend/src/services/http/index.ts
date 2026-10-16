@@ -314,6 +314,9 @@ function fileBody(input: FileCreateInput): Record<string, unknown> {
     department: input.department,
     year: input.year,
     fileType: input.fileType,
+    recordKind: input.recordKind ?? (input.documentSize === 'A0' ? 'Map' : input.fileType === 'Map' ? 'Map' : 'File'),
+    documentSize: input.documentSize ?? 'Other',
+    eOfficeReference: input.eOfficeReference?.trim() || null,
     shelfId: toApiId(input.shelfId, 'shelf'),
     position: input.position,
     pincode: input.pincode,
@@ -333,6 +336,9 @@ export const httpFilesService: FilesApi = {
         search: query.search,
         department: query.department,
         status: query.status,
+        recordKind: query.recordKind,
+        fileType: query.fileType,
+        eOfficeStatus: query.eOfficeStatus,
         roomId: query.roomId,
         sectionId: query.sectionId,
         shelfId: query.shelfId,
@@ -396,6 +402,13 @@ export const httpFilesService: FilesApi = {
       shelfId: toApiId(shelfId, 'shelf'),
       position,
       reason,
+    });
+    return result.ok ? ok(toFile(result.value)) : result;
+  },
+
+  async updateEOfficeReference(fileId, reference) {
+    const result = await attempt<Dto>('PUT', `/api/files/${fileId}/e-office-reference`, {
+      eOfficeReference: reference.trim() || null,
     });
     return result.ok ? ok(toFile(result.value)) : result;
   },

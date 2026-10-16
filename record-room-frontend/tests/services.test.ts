@@ -114,6 +114,16 @@ describe('files.validateCreate', () => {
     expect(issues.some((issue) => issue.field === 'position')).toBe(true);
   });
 
+  it('refuses an e-office reference longer than 200 characters', async () => {
+    const shelf = await firstActiveShelf();
+    const issues = await service.files.validateCreate({
+      ...baseFile,
+      shelfId: shelf.id,
+      eOfficeReference: 'E'.repeat(201),
+    });
+    expect(issues.some((issue) => issue.field === 'eOfficeReference' && issue.severity === 'error')).toBe(true);
+  });
+
   it('accepts a clean row', async () => {
     const shelf = await firstActiveShelf();
     const issues = await service.files.validateCreate({ ...baseFile, shelfId: shelf.id });
@@ -133,6 +143,80 @@ describe('files.create', () => {
     expect(result.value.location).toContain(shelf.code);
     expect(result.value.status).toBe('Available');
     expect((await service.locations.findShelf(shelf.id))?.occupied).toBe(before + 1);
+  });
+
+  it('defaults A0 documents to map records when staff do not override the kind', async () => {
+    const shelf = await firstActiveShelf();
+    const result = await service.files.create({
+      ...baseFile,
+      fileBarcode: 'RF-9000000002',
+      documentSize: 'A0',
+      shelfId: shelf.id,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.documentSize).toBe('A0');
+    expect(result.value.recordKind).toBe('Map');
+  });
+
+  it('searches and filters by optional e-office reference and lets staff clear it', async () => {
+    const shelf = await firstActiveShelf();
+    const created = await service.files.create({
+      ...baseFile,
+      fileBarcode: 'RF-9000000003',
+      eOfficeReference: 'EOFFICE/REV/2026/003',
+      shelfId: shelf.id,
+    });
+
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    expect(created.value.eOfficeReference).toBe('EOFFICE/REV/2026/003');
+    expect(
+      (await service.files.list({ search: 'EOFFICE/REV/2026/003' })).items.some(
+        (file) => file.id === created.value.id,
+      ),
+    ).toBe(true);
+    expect(
+      (await service.files.list({ search: created.value.fileBarcode, eOfficeStatus: 'Linked' })).items.some(
+        (file) => file.id === created.value.id,
+      ),
+    ).toBe(true);
+    expect(
+      (await service.files.list({ search: created.value.fileBarcode, eOfficeStatus: 'Not linked' })).items.some(
+        (file) => file.id === created.value.id,
+      ),
+    ).toBe(false);
+
+    const updated = await service.files.updateEOfficeReference(created.value.id, 'EOFFICE/REV/2026/003B');
+    expect(updated.ok).toBe(true);
+    if (!updated.ok) return;
+    expect(updated.value.eOfficeReference).toBe('EOFFICE/REV/2026/003B');
+
+    const cleared = await service.files.updateEOfficeReference(created.value.id, '');
+    expect(cleared.ok).toBe(true);
+    if (!cleared.ok) return;
+    expect(cleared.value.eOfficeReference).toBeUndefined();
+    expect(
+      (await service.files.list({ search: created.value.fileBarcode, eOfficeStatus: 'Not linked' })).items.some(
+        (file) => file.id === created.value.id,
+      ),
+    ).toBe(true);
+  });
+
+  it('rejects an e-office reference longer than 200 characters', async () => {
+    const shelf = await firstActiveShelf();
+    const created = await service.files.create({
+      ...baseFile,
+      fileBarcode: 'RF-9000000004',
+      shelfId: shelf.id,
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+
+    const updated = await service.files.updateEOfficeReference(created.value.id, 'E'.repeat(201));
+    expect(updated.ok).toBe(false);
   });
 
   it('writes a movement event and an audit row in the same change', async () => {

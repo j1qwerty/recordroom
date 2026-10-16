@@ -116,6 +116,9 @@ public sealed record FileDto(
     string Status,
     string Location,
     int? RoomId,
+    int? SectionId,
+    int? AlmirahId,
+    int? ShelfId,
     string Section,
     string Almirah,
     string Shelf,
@@ -134,7 +137,10 @@ public sealed record FileDto(
     string LastMovement,
     string? Holder,
     string? HolderEmployeeCode,
-    string Description);
+    string Description,
+    string? RecordKind = null,
+    string? DocumentSize = null,
+    string? EOfficeReference = null);
 
 public sealed record FileCreateInput(
     string FileBarcode,
@@ -150,9 +156,13 @@ public sealed record FileCreateInput(
     string PropertyArea,
     string Dealer,
     string CodalLife,
-    string Description);
+    string Description,
+    string? RecordKind = null,
+    string DocumentSize = "Other",
+    string? EOfficeReference = null);
 
 public sealed record RelocateInput(int ShelfId, int Position, string Reason);
+public sealed record EOfficeReferenceInput(string? EOfficeReference);
 
 /// <summary>
 /// Paged envelope. <c>collectionTotal</c> is the true registry size so the UI can

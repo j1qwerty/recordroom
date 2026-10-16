@@ -64,8 +64,8 @@ export const dashboardService: DashboardApi = {
         id: event.id,
         label: event.kind,
         date: event.at.slice(5, 16).replace('T', ' '),
-        actor: `${event.kind} Â· ${event.actor}`,
-        detail: `${event.fileBarcode} â€” ${event.detail}`,
+        actor: `${event.kind} · ${event.actor}`,
+        detail: `${event.fileBarcode} — ${event.detail}`,
         tone: toneFor(event.kind),
       }));
   },

@@ -131,7 +131,7 @@ export function UsersPage() {
                         <Badge tone="info">{user.role}</Badge>
                       </td>
                       <td className="px-5 py-4 text-xs">
-                        {employee ? `${employee.name} Â· ${employee.department}` : 'â€”'}
+                        {employee ? `${employee.name} · ${employee.department}` : '—'}
                       </td>
                       <td className="px-5 py-4">
                         <StatusBadge status={user.active ? 'Active' : 'Inactive'} />
@@ -190,7 +190,7 @@ export function UsersPage() {
                       {can(role as Role, permission) ? (
                         <span className="text-[var(--rr-success)]">â—</span>
                       ) : (
-                        <span className="muted">â€”</span>
+                        <span className="muted">—</span>
                       )}
                     </td>
                   ))}
@@ -311,7 +311,7 @@ function UserForm({
         label="User name"
         htmlFor="user-name"
         required
-        hint="3â€“32 characters: letters, digits, dot, dash, underscore."
+        hint="3–32 characters: letters, digits, dot, dash, underscore."
       >
         <TextInput
           id="user-name"
@@ -353,7 +353,7 @@ function UserForm({
           <option value="">Not linked</option>
           {employees.map((employee) => (
             <option key={employee.code} value={employee.code}>
-              {employee.code} Â· {employee.name}
+              {employee.code} · {employee.name}
             </option>
           ))}
         </SelectInput>

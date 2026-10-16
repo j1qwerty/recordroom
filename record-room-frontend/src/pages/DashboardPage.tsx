@@ -120,7 +120,7 @@ export function DashboardPage() {
                 <div>
                   <p className="text-sm font-semibold">Current record-room footprint</p>
                   <p className="muted text-xs">
-                    {firstRoom.building} Ã‚Â· {firstRoom.floor} Ã‚Â· {rooms.length} rooms mapped
+                    {firstRoom.building} · {firstRoom.floor} · {rooms.length} rooms mapped
                   </p>
                 </div>
                 <span className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-semibold text-accent">
@@ -150,7 +150,7 @@ export function DashboardPage() {
         <StatCard
           label="Mapped to a shelf"
           value={`${stats.mappedPercent}%`}
-          note={`${stats.roomCount} rooms Ã‚Â· sections and almirahs mapped`}
+          note={`${stats.roomCount} rooms · sections and almirahs mapped`}
           icon={<MapPin size={22} />}
         />
         <StatCard
@@ -174,7 +174,7 @@ export function DashboardPage() {
             <WarningCircle size={22} className="mt-0.5 shrink-0 text-[var(--rr-danger)]" />
             <div>
               <p className="text-sm font-semibold">
-                {overdue.length} receipt(s) overdue Ã‚Â· {stats.activeBorrowers} active borrower(s)
+                {overdue.length} receipt(s) overdue · {stats.activeBorrowers} active borrower(s)
               </p>
               <p className="muted mt-1 text-sm leading-6">
                 {overdue
@@ -182,7 +182,7 @@ export function DashboardPage() {
                   .map(
                     (issue) => `${issue.receiptNumber} (${issue.borrowerName}, due ${issue.dueAt})`,
                   )
-                  .join(' Ã‚Â· ')}
+                  .join(' · ')}
               </p>
             </div>
           </div>
@@ -213,10 +213,10 @@ export function DashboardPage() {
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-sm font-semibold">
-                      {room.code} Ã‚Â· {room.name}
+                      {room.code} · {room.name}
                     </p>
                     <p className="muted mt-1 text-xs">
-                      {room.building} Ã‚Â· {room.floor} Ã‚Â· {room.sectionCount} sections Ã‚Â·{' '}
+                      {room.building} · {room.floor} · {room.sectionCount} sections ·{' '}
                       {room.almirahCount} almirahs
                     </p>
                   </div>

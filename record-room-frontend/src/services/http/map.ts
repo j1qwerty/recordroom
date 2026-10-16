@@ -38,9 +38,10 @@ import type {
 } from '../../types';
 import type { ReportKey } from '../../types';
 import { toId } from './client';
+import { cleanDisplayText } from '../../lib/utils';
 
 const str = (value: unknown): string =>
-  value === null || value === undefined ? '' : String(value);
+  value === null || value === undefined ? '' : cleanDisplayText(String(value));
 
 const num = (value: unknown, fallback = 0): number =>
   typeof value === 'number' && Number.isFinite(value) ? value : fallback;
@@ -201,14 +202,17 @@ export function toFile(dto: Record<string, unknown>): RecordFile {
     department: str(dto.department),
     year: num(dto.year),
     fileType: str(dto.fileType) as RecordFile['fileType'],
+    recordKind: str(dto.recordKind) as RecordFile['recordKind'],
+    documentSize: str(dto.documentSize) as RecordFile['documentSize'],
+    eOfficeReference: str(dto.eOfficeReference) || undefined,
     status: str(dto.status) as RecordFile['status'],
     location: str(dto.location),
     roomId: dto.roomId === null || dto.roomId === undefined ? '' : toId(dto.roomId as number),
-    sectionId: '',
+    sectionId: dto.sectionId === null || dto.sectionId === undefined ? '' : toId(dto.sectionId as number),
     section: str(dto.section),
-    almirahId: '',
+    almirahId: dto.almirahId === null || dto.almirahId === undefined ? '' : toId(dto.almirahId as number),
     almirah: str(dto.almirah),
-    shelfId: '',
+    shelfId: dto.shelfId === null || dto.shelfId === undefined ? '' : toId(dto.shelfId as number),
     shelf: str(dto.shelf),
     shelfBarcode: str(dto.shelfBarcode),
     position: num(dto.position),

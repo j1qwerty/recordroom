@@ -26,6 +26,9 @@ public class FilesController(IFilesService files) : ControllerBase
         [FromQuery] int? sectionId,
         [FromQuery] int? shelfId,
         [FromQuery] string? area,
+        [FromQuery] string? recordKind,
+        [FromQuery] string? fileType,
+        [FromQuery] string? eOfficeStatus,
         [FromQuery] string? sort,
         [FromQuery] string? direction,
         [FromQuery] int page = 1,
@@ -41,6 +44,9 @@ public class FilesController(IFilesService files) : ControllerBase
             SectionId = sectionId,
             ShelfId = shelfId,
             Area = area,
+            RecordKind = recordKind,
+            FileType = fileType,
+            EOfficeStatus = eOfficeStatus,
             Sort = sort,
             Direction = direction,
             Page = page,
@@ -89,6 +95,11 @@ public class FilesController(IFilesService files) : ControllerBase
     [HttpPost("{id:int}/relocate")]
     public async Task<IResult> Relocate(int id, RelocateInput input, CancellationToken ct) =>
         ApiResults.FromResult(await files.RelocateAsync(id, input, ct));
+
+    [Authorize(Roles = "Admin,Supervisor,Operator")]
+    [HttpPut("{id:int}/e-office-reference")]
+    public async Task<IResult> UpdateEOfficeReference(int id, EOfficeReferenceInput input, CancellationToken ct) =>
+        ApiResults.FromResult(await files.UpdateEOfficeReferenceAsync(id, input, ct));
 
     [Authorize(Roles = "Admin,Supervisor")]
     [HttpDelete("{id:int}")]

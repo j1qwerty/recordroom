@@ -27,6 +27,9 @@ function matchSearch(file: RecordFile, needle: string): boolean {
     file.holder ?? '',
     file.area,
     file.dealer,
+    file.recordKind ?? (file.fileType === 'Map' ? 'Map' : 'File'),
+    file.documentSize ?? '',
+    file.eOfficeReference ?? '',
   ]
     .join(' ')
     .toLowerCase();
@@ -61,6 +64,12 @@ export const filesService: FilesApi = {
         return false;
       }
       if (query.status && query.status !== 'All' && file.status !== query.status) return false;
+      const recordKind = file.recordKind ?? (file.fileType === 'Map' ? 'Map' : 'File');
+      if (query.recordKind && query.recordKind !== 'All' && recordKind !== query.recordKind) return false;
+      if (query.fileType && query.fileType !== 'All' && file.fileType !== query.fileType) return false;
+      const hasEOffice = Boolean(file.eOfficeReference?.trim());
+      if (query.eOfficeStatus === 'Linked' && !hasEOffice) return false;
+      if (query.eOfficeStatus === 'Not linked' && hasEOffice) return false;
       if (query.roomId && file.roomId !== query.roomId) return false;
       if (query.sectionId && file.sectionId !== query.sectionId) return false;
       if (query.shelfId && file.shelfId !== query.shelfId) return false;
@@ -140,6 +149,13 @@ export const filesService: FilesApi = {
     if (!Number.isFinite(input.year) || input.year < 1800 || input.year > 2200) {
       issues.push({ field: 'year', message: 'Enter a four-digit year.', severity: 'error' });
     }
+    if ((input.eOfficeReference?.trim().length ?? 0) > 200) {
+      issues.push({
+        field: 'eOfficeReference',
+        message: 'E-office reference must be 200 characters or fewer.',
+        severity: 'error',
+      });
+    }
 
     // checkShelfBarcode: the shelf must exist and be usable.
     const shelf = await locationsService.findShelf(input.shelfId);
@@ -218,6 +234,9 @@ export const filesService: FilesApi = {
       department: input.department.trim(),
       year: input.year,
       fileType: input.fileType,
+      recordKind: input.recordKind ?? (input.documentSize === 'A0' ? 'Map' : input.fileType === 'Map' ? 'Map' : 'File'),
+      documentSize: input.documentSize ?? 'Other',
+      eOfficeReference: input.eOfficeReference?.trim() || undefined,
       status: 'Available',
       location: locationPath(room, section, unit, shelf),
       roomId: room?.id ?? '',
@@ -360,6 +379,35 @@ export const filesService: FilesApi = {
       });
     });
 
+    return ok(updated);
+  },
+
+  async updateEOfficeReference(fileId, reference) {
+    const file = await filesService.get(fileId);
+    if (!file) return err('File not found.', 'fileId');
+
+    const previous = file.eOfficeReference?.trim() ?? '';
+    const next = reference.trim();
+    if (next.length > 200) return err('E-office reference must be 200 characters or fewer.', 'eOfficeReference');
+    const updated: RecordFile = {
+      ...file,
+      eOfficeReference: next || undefined,
+      updatedAt: timestamp().slice(0, 10),
+      updatedBy: session.userName(),
+    };
+
+    store.update((draft) => {
+      const index = draft.files.findIndex((item) => item.id === fileId);
+      if (index >= 0) draft.files[index] = updated;
+      log(draft, {
+        action: 'Update',
+        entity: 'RecordFile',
+        entityId: fileId,
+        before: previous || 'Not linked',
+        after: next || 'Not linked',
+        summary: `Updated e-office reference for ${file.fileBarcode}`,
+      });
+    });
     return ok(updated);
   },
 

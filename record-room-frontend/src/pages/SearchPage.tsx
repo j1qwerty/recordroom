@@ -39,13 +39,14 @@ export function SearchPage() {
   const [query, setQuery] = useState(() => params.get('q') ?? '');
   const [status, setStatus] = useState<FileStatus | 'All'>('All');
   const [department, setDepartment] = useState('All');
+  const [eOfficeStatus, setEOfficeStatus] = useState<'All' | 'Linked' | 'Not linked'>('All');
   const [ai, setAi] = useState(false);
 
   // One request per filter change: the service owns matching, so re-running the
   // call is what keeps the results honest rather than filtering rows in the DOM.
   const { data: result, loading } = useQuery(
-    () => service.files.list({ search: query, status, department, pageSize: 50 }),
-    [query, status, department],
+    () => service.files.list({ search: query, status, department, eOfficeStatus, pageSize: 50 }),
+    [query, status, department, eOfficeStatus],
     EMPTY,
   );
   const { data: departments } = useQuery(() => service.files.departments(), [], [] as string[]);
@@ -112,6 +113,16 @@ export function SearchPage() {
               </option>
             ))}
           </SelectInput>
+          <SelectInput
+            value={eOfficeStatus}
+            onChange={(event) => setEOfficeStatus(event.target.value as 'All' | 'Linked' | 'Not linked')}
+            aria-label="E-office link"
+            className="lg:w-48"
+          >
+            <option value="All">E-office: all</option>
+            <option value="Linked">Linked to e-office</option>
+            <option value="Not linked">Not linked to e-office</option>
+          </SelectInput>
         </div>
         {ai && (
           <div className="mt-4 rounded-xl border border-[var(--rr-accent)]/30 bg-accent-soft p-4 text-sm">
@@ -148,6 +159,7 @@ export function SearchPage() {
                   setQuery('');
                   setStatus('All');
                   setDepartment('All');
+                  setEOfficeStatus('All');
                 }}
               >
                 Clear search
@@ -168,13 +180,15 @@ export function SearchPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge status={file.status} />
                     <span className="font-mono text-xs muted">{file.fileBarcode}</span>
-                    <Badge tone="neutral">{file.fileType}</Badge>
+                    <Badge tone="neutral">{file.recordKind ?? (file.documentSize === 'A0' || file.fileType === 'Map' ? 'Map' : 'File')}</Badge>
+                    <Badge tone={file.eOfficeReference?.trim() ? 'success' : 'neutral'}>{file.eOfficeReference?.trim() ? 'E-office linked' : 'Not linked'}</Badge>
                   </div>
                   <h2 className="mt-3 text-lg font-semibold tracking-tight">{file.subject}</h2>
                   <p className="muted mt-1 text-sm">
                     {file.fileNumber} · {file.department} · {file.year}
                   </p>
                   <p className="muted mt-3 max-w-3xl text-sm leading-6">{file.description}</p>
+                  {file.eOfficeReference?.trim() && <p className="mt-2 break-all font-mono text-xs muted">E-office reference: {file.eOfficeReference}</p>}
                   {file.holder && (
                     <p className="mt-3 text-xs text-[var(--rr-warning)]">
                       Currently with {file.holder}

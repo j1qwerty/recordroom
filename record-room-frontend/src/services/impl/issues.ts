@@ -33,7 +33,7 @@ function deriveStatus(issue: IssueRecord, now = new Date()): IssueStatus {
 
 function borrowerLabel(issue: IssueRecord): string {
   return issue.borrowerType === 'Employee'
-    ? `${issue.borrowerName} Â· ${issue.department}`
+    ? `${issue.borrowerName} · ${issue.department}`
     : `${issue.borrowerName} (depositor ${issue.borrowerEmployeeCode})`;
 }
 
@@ -46,7 +46,10 @@ export const issuesService: IssueApi = {
       if (query.open && !isOpen(issue)) return false;
       if (search) {
         const haystack =
-          `${issue.borrowerName} ${issue.borrowerEmployeeCode} ${issue.receiptNumber} ${issue.purpose}`.toLowerCase();
+          `${issue.borrowerName} ${issue.borrowerEmployeeCode} ${issue.receiptNumber} ${issue.purpose} ${issue.department} ${issue.lines.map((line) => {
+            const file = state.files.find((record) => record.id === line.fileId);
+            return `${line.fileBarcode} ${file?.subject ?? ''} ${file?.eOfficeReference ?? ''}`;
+          }).join(' ')}`.toLowerCase();
         if (!haystack.includes(search)) return false;
       }
       return true;
@@ -241,7 +244,7 @@ export const issuesService: IssueApi = {
           to: file.location,
           actor: session.userName(),
           at: now,
-          detail: `Returned against ${issue.receiptNumber}${condition ? ` â€” condition: ${condition}` : ''}.`,
+          detail: `Returned against ${issue.receiptNumber}${condition ? ` — condition: ${condition}` : ''}.`,
           issueId: issue.id,
         });
       });

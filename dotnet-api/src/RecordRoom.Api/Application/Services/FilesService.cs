@@ -15,6 +15,7 @@ public interface IFilesService
     Task<IReadOnlyList<FieldError>> ValidateCreateAsync(FileCreateInput input, CancellationToken ct = default);
     Task<Result<FileDto>> CreateAsync(FileCreateInput input, CancellationToken ct = default);
     Task<Result<FileDto>> RelocateAsync(int id, RelocateInput input, CancellationToken ct = default);
+    Task<Result<FileDto>> UpdateEOfficeReferenceAsync(int id, EOfficeReferenceInput input, CancellationToken ct = default);
     Task<Result<bool>> DeleteAsync(int id, CancellationToken ct = default);
     Task<int> CountAsync(CancellationToken ct = default);
 }
@@ -24,6 +25,9 @@ public sealed class FileQuery
     public string? Search { get; init; }
     public string? Department { get; init; }
     public string? Status { get; init; }
+    public string? RecordKind { get; init; }
+    public string? FileType { get; init; }
+    public string? EOfficeStatus { get; init; }
     public int? RoomId { get; init; }
     public int? SectionId { get; init; }
     public int? ShelfId { get; init; }
@@ -60,11 +64,11 @@ public sealed class FilesService(
     private static FileDto ToDto(RecordFile f, Section? section, StorageUnit? unit, Room? room) => new(
         f.Id, f.Barcode, f.FileNumber, f.Subject, f.Department, f.Year,
         Display.FileKind(f.FileKind), Display.Record(f.Status), f.LocationDisplay,
-        f.RoomId, section?.Code ?? string.Empty, unit?.Code ?? string.Empty,
+        f.RoomId, f.SectionId, f.AlmirahId, f.ShelfId, section?.Code ?? string.Empty, unit?.Code ?? string.Empty,
         f.Shelf?.Code ?? string.Empty, f.ShelfBarcode, f.ApproxPosition,
         f.Pincode, f.Area, f.PropertyNo, f.PropertyArea, f.Dealer, f.CodalLife,
         f.CreatedAt, f.CreatedBy, f.UpdatedAt, f.UpdatedBy, Stamp(f.LastMovementAt),
-        f.Holder, f.HolderEmployeeCode, f.Description);
+        f.Holder, f.HolderEmployeeCode, f.Description, f.RecordKind, f.DocumentSize, f.EOfficeReference);
 
     private async Task<FileDto?> ProjectAsync(RecordFile f, CancellationToken ct)
     {
@@ -74,6 +78,7 @@ public sealed class FilesService(
                 .FirstOrDefaultAsync(s => s.Id == f.ShelfId, ct);
         var unit = shelf?.StorageUnit;
         var room = unit is null ? null : await db.Rooms.FirstOrDefaultAsync(r => r.Id == unit.RoomId, ct);
+        f.Shelf = shelf;
         return ToDto(f, unit?.Section, unit, room);
     }
 
@@ -91,6 +96,7 @@ public sealed class FilesService(
                 || f.Department.ToLower().Contains(needle)
                 || f.LocationDisplay.ToLower().Contains(needle)
                 || f.Area.ToLower().Contains(needle)
+                || (f.EOfficeReference != null && f.EOfficeReference.ToLower().Contains(needle))
                 || (f.Holder != null && f.Holder.ToLower().Contains(needle)));
         }
 
@@ -101,6 +107,20 @@ public sealed class FilesService(
             var status = Display.ParseRecord(q.Status) ?? RecordStatus.Available;
             query = query.Where(f => f.Status == status);
         }
+        if (!string.IsNullOrWhiteSpace(q.RecordKind) && q.RecordKind != "All")
+        {
+            var recordKind = string.Equals(q.RecordKind, "Map", StringComparison.OrdinalIgnoreCase) ? "Map" : "File";
+            query = query.Where(f => f.RecordKind == recordKind);
+        }
+        if (!string.IsNullOrWhiteSpace(q.FileType) && q.FileType != "All")
+        {
+            var fileKind = ParseKind(q.FileType);
+            query = query.Where(f => f.FileKind == fileKind);
+        }
+        if (string.Equals(q.EOfficeStatus, "Linked", StringComparison.OrdinalIgnoreCase))
+            query = query.Where(f => f.EOfficeReference != null && f.EOfficeReference.Trim() != string.Empty);
+        else if (string.Equals(q.EOfficeStatus, "Not linked", StringComparison.OrdinalIgnoreCase))
+            query = query.Where(f => f.EOfficeReference == null || f.EOfficeReference.Trim() == string.Empty);
         if (q.RoomId is not null) query = query.Where(f => f.RoomId == q.RoomId);
         if (q.SectionId is not null) query = query.Where(f => f.SectionId == q.SectionId);
         if (q.ShelfId is not null) query = query.Where(f => f.ShelfId == q.ShelfId);
@@ -111,6 +131,7 @@ public sealed class FilesService(
         query = (q.Sort?.ToLower()) switch
         {
             "subject" => descending ? query.OrderByDescending(f => f.Subject) : query.OrderBy(f => f.Subject),
+            "filebarcode" => descending ? query.OrderByDescending(f => f.Barcode) : query.OrderBy(f => f.Barcode),
             "year" => descending ? query.OrderByDescending(f => f.Year) : query.OrderBy(f => f.Year),
             "department" => descending ? query.OrderByDescending(f => f.Department) : query.OrderBy(f => f.Department),
             "lastmovement" => descending ? query.OrderByDescending(f => f.LastMovementAt) : query.OrderBy(f => f.LastMovementAt),
@@ -189,6 +210,8 @@ public sealed class FilesService(
 
         if (string.IsNullOrWhiteSpace(input.Subject))
             errors.Add(new FieldError("Subject is required.", "subject"));
+        if (!string.IsNullOrWhiteSpace(input.EOfficeReference) && input.EOfficeReference.Trim().Length > 200)
+            errors.Add(new FieldError("E-office reference must be 200 characters or fewer.", "eOfficeReference"));
         if (string.IsNullOrWhiteSpace(input.Department))
             errors.Add(new FieldError("Department is required.", "department"));
         if (input.Year is < 1800 or > 2200)
@@ -248,6 +271,11 @@ public sealed class FilesService(
             Department = input.Department.Trim(),
             Year = input.Year,
             FileKind = ParseKind(input.FileType),
+            RecordKind = input.RecordKind is null
+                ? (string.Equals(input.DocumentSize, "A0", StringComparison.OrdinalIgnoreCase) ? "Map" : "File")
+                : (string.Equals(input.RecordKind, "Map", StringComparison.OrdinalIgnoreCase) ? "Map" : "File"),
+            DocumentSize = input.DocumentSize is "A0" or "A1" or "A2" or "A3" or "A4" ? input.DocumentSize : "Other",
+            EOfficeReference = string.IsNullOrWhiteSpace(input.EOfficeReference) ? null : input.EOfficeReference.Trim(),
             Status = RecordStatus.Available,
             RoomId = room.Id,
             SectionId = unit.SectionId,
@@ -343,6 +371,44 @@ public sealed class FilesService(
             $"{file.Barcode} moved to {shelf.Code}");
 
         return Result<FileDto>.Ok(ToDto(file, unit.Section, unit, room));
+    }
+
+    public async Task<Result<FileDto>> UpdateEOfficeReferenceAsync(
+        int id,
+        EOfficeReferenceInput input,
+        CancellationToken ct = default)
+    {
+        var file = await db.Files.FirstOrDefaultAsync(f => f.Id == id, ct);
+        if (file is null) return Result<FileDto>.Fail("File not found.", "id");
+
+        var reference = input.EOfficeReference?.Trim();
+        if (reference?.Length > 200)
+            return Result<FileDto>.Fail(
+                "E-office reference must be 200 characters or fewer.",
+                "eOfficeReference");
+
+        var previous = file.EOfficeReference;
+        file.EOfficeReference = string.IsNullOrWhiteSpace(reference) ? null : reference;
+        file.UpdatedAt = DateTime.UtcNow;
+        file.UpdatedBy = current.UserName;
+
+        await audit.LogAsync(
+            db,
+            AuditAction.Update,
+            "RecordFile",
+            file.Id.ToString(),
+            previous ?? "Not linked",
+            file.EOfficeReference ?? "Not linked",
+            $"Updated e-office reference for {file.Barcode}");
+        await db.SaveChangesAsync(ct);
+
+        await audit.AnnounceAsync(
+            RealtimeChannels.Files,
+            "file.updated",
+            file.Id.ToString(),
+            $"E-office reference updated for {file.Barcode}");
+
+        return Result<FileDto>.Ok(await ProjectAsync(file, ct) ?? ToDto(file, null, null, null));
     }
 
     public async Task<Result<bool>> DeleteAsync(int id, CancellationToken ct)
