@@ -175,7 +175,7 @@ export function LocationsPage() {
                 >
                   <p className="text-sm font-semibold">{item.code}</p>
                   <p className="muted mt-1 text-xs">
-                    {item.name} Â· {item.sections.length} sections Â· {item.storageUnits.length}{' '}
+                    {item.name} · {item.sections.length} sections · {item.storageUnits.length}{' '}
                     almirahs
                   </p>
                 </button>
@@ -227,7 +227,7 @@ export function LocationsPage() {
                       >
                         <p className="text-sm font-semibold">{item.name}</p>
                         <p className="muted mt-0.5 text-[11px]">
-                          {almirahs.length} almirahs Â· {shelves.length} shelves
+                          {almirahs.length} almirahs · {shelves.length} shelves
                         </p>
                       </button>
                       <StatusBadge status={item.status} />
@@ -274,10 +274,10 @@ export function LocationsPage() {
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-base p-5">
               <div>
                 <p className="text-sm font-semibold">
-                  {room.code} Â· {section ? `Section ${section.name}` : 'No section selected'}
+                  {room.code} · {section ? `Section ${section.name}` : 'No section selected'}
                 </p>
                 <p className="muted mt-1 text-xs">
-                  {section?.code} Â· {units.length} almirah(s) in this section
+                  {section?.code} · {units.length} almirah(s) in this section
                 </p>
               </div>
               {allowed('locations.edit') && section && (
@@ -337,7 +337,7 @@ export function LocationsPage() {
               {revisions.length === 0 ? (
                 <p className="muted mt-3 text-xs leading-6">
                   No revision saved yet. Saving bumps a revision number and records who changed the
-                  layout and why â€” the change history the legacy app never kept.
+                  layout and why — the change history the legacy app never kept.
                 </p>
               ) : (
                 <ul className="mt-4 space-y-3">
@@ -348,7 +348,7 @@ export function LocationsPage() {
                         <span className="muted text-[10px]">{revision.at}</span>
                       </div>
                       <p className="muted mt-1 text-[11px]">
-                        {revision.note} Â· {revision.actor}
+                        {revision.note} · {revision.actor}
                       </p>
                     </li>
                   ))}
@@ -410,7 +410,7 @@ export function LocationsPage() {
                             <StatusBadge status={shelf.status} />
                           </div>
                           <p className="muted mt-1.5 text-[11px]">
-                            {files} file(s) Â· {shelf.occupied}/{shelf.capacity} approx.
+                            {files} file(s) · {shelf.occupied}/{shelf.capacity} approx.
                           </p>
                           {allowed('locations.edit') && (
                             <div className="mt-2 flex gap-2">
@@ -519,7 +519,7 @@ function UnitCard({
         {unit.shelves.map((shelf) => (
           <div
             key={shelf.id}
-            title={`${shelf.code} Â· ${shelf.barcode} Â· ${shelf.status}`}
+            title={`${shelf.code} · ${shelf.barcode} · ${shelf.status}`}
             className={cn(
               'h-6 rounded border',
               shelf.status === 'Active'
@@ -534,7 +534,7 @@ function UnitCard({
       </div>
 
       <p className="muted mt-3 flex items-center gap-1 text-[10px]">
-        <Ruler size={11} /> x {unit.x}% Â· y {unit.y}% Â· {occupied}/{capacity} occupied
+        <Ruler size={11} /> x {unit.x}% · y {unit.y}% · {occupied}/{capacity} occupied
       </p>
       <p className="muted mt-1 font-mono text-[10px]">barcode {unit.barcode}</p>
 
