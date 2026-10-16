@@ -34,6 +34,7 @@ export function ReturnPage() {
   const { allowed } = useSession();
 
   const [receiptId, setReceiptId] = useState('');
+  const [receiptSearch, setReceiptSearch] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [condition, setCondition] = useState(CONDITIONS[0]);
   const [flash, setFlash] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
@@ -42,8 +43,8 @@ export function ReturnPage() {
   // The open list and the chosen receipt are two separate asks; both are refetched
   // after a write, because returning files changes both answers.
   const { data: openPage, reload: reloadOpen } = useQuery(
-    () => service.issues.list({ open: true, pageSize: 50 }),
-    [],
+    () => service.issues.list({ open: true, borrower: receiptSearch.trim(), pageSize: 100 }),
+    [receiptSearch],
     EMPTY_OPEN,
   );
   const open = openPage.items;
@@ -136,20 +137,20 @@ export function ReturnPage() {
                 size={18}
               />
               <TextInput
-                value={receiptId}
+                value={receiptSearch}
                 onChange={(event) => {
-                  const value = event.target.value;
-                  setReceiptId(value);
+                  setReceiptSearch(event.target.value);
+                  setReceiptId('');
                   setSelected([]);
                   setFlash(null);
                 }}
-                placeholder="Or type a receipt number"
-                className="pl-11 font-mono"
-                aria-label="Receipt number"
+                placeholder="Employee name/code, receipt, file barcode or subject"
+                className="pl-11"
+                aria-label="Search open receipts"
               />
             </div>
             <p className="muted mt-2 text-xs">
-              Typing a barcode returns every file on that receipt.
+              Search matches employee name/code, department, receipt number, purpose, file barcode and file subject. Select the matching receipt above to record a return.
             </p>
           </div>
 
@@ -186,7 +187,7 @@ export function ReturnPage() {
                 description={
                   receiptLoading
                     ? 'Asking the API which files were issued on that receipt.'
-                    : 'Choose an open receipt, or type its number, to list the files that were issued.'
+                    : 'Search by employee or file details, then choose a matching open receipt.'
                 }
               />
             </div>
