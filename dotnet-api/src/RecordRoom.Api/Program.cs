@@ -297,8 +297,18 @@ if (app.Configuration.GetValue("Hangfire:EnableScheduling", true))
         pruneCron,
         new RecurringJobOptions { TimeZone = TimeZoneInfo.Utc });
 
+    // Starts the background worker. Without this the recurring definitions above
+    // are written to storage but nothing ever dequeues or runs them, so the
+    // overdue sweep and audit retention silently never happen.
+    app.UseHangfireServer(new BackgroundJobServerOptions
+    {
+        // Schedule the overdue sweep on a short interval so a fresh deployment
+        // does not idle until the next cron tick.
+        SchedulePollingInterval = TimeSpan.FromSeconds(15),
+    });
+
     app.Logger.LogInformation(
-        "Hangfire scheduled: overdue receipts '{OverdueCron}', audit retention '{PruneCron}' (UTC).",
+        "Hangfire scheduled and worker started: overdue receipts '{OverdueCron}', audit retention '{PruneCron}' (UTC).",
         overdueCron,
         pruneCron);
 }
