@@ -139,7 +139,8 @@ public sealed record FileDto(
     string? HolderEmployeeCode,
     string Description,
     string? RecordKind = null,
-    string? DocumentSize = null);
+    string? DocumentSize = null,
+    string? EOfficeReference = null);
 
 public sealed record FileCreateInput(
     string FileBarcode,
