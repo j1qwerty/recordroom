@@ -9,6 +9,7 @@ import { Flash } from '../components/ui/Flash';
 import { BarcodeSymbol } from '../components/BarcodeSymbol';
 import { useQuery, useService } from '../hooks/useService';
 import { buildPayload } from '../lib/barcode';
+import { documentAcceptAttribute, formatDocumentSize, validateDocumentFile } from '../lib/document';
 import { nextFileBarcode } from '../services/impl/files';
 import type { Area, DocumentSize, FileCreateInput, FileType, RecordFile, RecordKind, StorageStatus } from '../types';
 import type { Page, RecordRoomService } from '../services/contracts';
@@ -149,6 +150,8 @@ export function NewFilePage() {
   const [error, setError] = useState<string | null>(null);
   const [createdId, setCreatedId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [selectedDocument, setSelectedDocument] = useState<File | null>(null);
+  const [attachmentMessage, setAttachmentMessage] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
   const set = <K extends keyof FileCreateInput>(key: K, value: FileCreateInput[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
@@ -235,6 +238,13 @@ export function NewFilePage() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (selectedDocument) {
+      const documentError = validateDocumentFile(selectedDocument);
+      if (documentError) {
+        setError(documentError);
+        return;
+      }
+    }
     setSaving(true);
     try {
       const result = await service.files.create(form);
@@ -244,6 +254,30 @@ export function NewFilePage() {
       }
       setError(null);
       setCreatedId(result.value.id);
+      setAttachmentMessage(null);
+      if (selectedDocument) {
+        try {
+          const upload = await service.files.uploadDocument(result.value.id, selectedDocument);
+          if (upload.ok) {
+            setAttachmentMessage({
+              tone: 'success',
+              text: upload.value.filename + ' uploaded as version ' + upload.value.version + '.',
+            });
+            setSelectedDocument(null);
+          } else {
+            setAttachmentMessage({
+              tone: 'danger',
+              text: 'The record was created, but the scan was not uploaded: ' + upload.error + ' Open the record to retry.',
+            });
+          }
+        } catch (uploadError) {
+          setAttachmentMessage({
+            tone: 'danger',
+            text: 'The record was created, but the scan could not be uploaded. Open the record to retry. ' +
+              (uploadError instanceof Error ? uploadError.message : ''),
+          });
+        }
+      }
       // The new barcode has to be in the series before the next suggestion.
       reloadFiles();
     } finally {
@@ -259,6 +293,8 @@ export function NewFilePage() {
     setRecordKindManuallySet(false);
     setBarcodeOverride(null);
     setCreatedId(null);
+    setSelectedDocument(null);
+    setAttachmentMessage(null);
     reloadFiles();
   };
 
@@ -281,6 +317,15 @@ export function NewFilePage() {
                   Shelf occupancy and the movement log were updated in the same write, and the
                   creation is on the audit trail.
                 </p>
+                {attachmentMessage && (
+                  <div className="mt-3">
+                    <Flash
+                      tone={attachmentMessage.tone}
+                      text={attachmentMessage.text}
+                      onDismiss={() => setAttachmentMessage(null)}
+                    />
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex gap-2">
@@ -582,6 +627,25 @@ export function NewFilePage() {
                         onChange={(event) => set('description', event.target.value)}
                         placeholder="Short identification note for retrieval staff"
                       />
+                    </Field>
+                    <Field
+                      label="Scanned document (optional)"
+                      htmlFor="new-file-document"
+                      hint="Attach the first PDF or image now, or upload it later from the record details. PDF/JPG/PNG/GIF, up to 512 MiB."
+                      className="sm:col-span-2"
+                    >
+                      <input
+                        id="new-file-document"
+                        type="file"
+                        accept={documentAcceptAttribute()}
+                        onChange={(event) => setSelectedDocument(event.target.files?.[0] ?? null)}
+                        className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-accent-soft file:px-3 file:py-2 file:font-semibold file:text-accent"
+                      />
+                      {selectedDocument && (
+                        <p className="muted mt-2 break-all text-xs">
+                          Selected: {selectedDocument.name} · {formatDocumentSize(selectedDocument.size)}
+                        </p>
+                      )}
                     </Field>
                   </FormGrid>
                 </div>
