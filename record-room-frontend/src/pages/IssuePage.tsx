@@ -243,7 +243,7 @@ export function IssuePage() {
                           <p className="muted mt-1 text-[11px]">E-office: {file.eOfficeReference?.trim() || 'Not linked'}</p>
                         </div>
                         <Button
-                          size="sm"
+                          className="min-h-8 px-3 text-xs"
                           variant="ghost"
                           disabled={alreadyAdded}
                           onClick={() => {
