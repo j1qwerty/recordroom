@@ -47,8 +47,8 @@ public class DigitizationController(IDigitizationService digitization) : Control
     [Authorize(Roles = "Admin,Supervisor,Operator")]
     [HttpPost("pages/{pageId:long}/document")]
     [Consumes("multipart/form-data")]
-    [RequestSizeLimit(538968064)]
-    [RequestFormLimits(MultipartBodyLengthLimit = 538968064)]
+    [RequestSizeLimit(50331648)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 50331648)]
     public async Task<IResult> UploadPageDocument(long pageId, [FromForm] IFormFile? document, CancellationToken ct) =>
         ApiResults.FromResult(await digitization.UploadPageDocumentAsync(pageId, document, ct));
 
@@ -110,8 +110,8 @@ public class UploadsController(IUploadsService uploads) : ControllerBase
     [Authorize(Roles = "Admin,Supervisor,Operator")]
     [HttpPost("maps/{id:long}/document")]
     [Consumes("multipart/form-data")]
-    [RequestSizeLimit(538968064)]
-    [RequestFormLimits(MultipartBodyLengthLimit = 538968064)]
+    [RequestSizeLimit(50331648)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 50331648)]
     public async Task<IResult> UploadMapDocument(long id, [FromForm] IFormFile? document, CancellationToken ct) =>
         ApiResults.FromResult(await uploads.UploadMapDocumentAsync(id, document, ct));
 

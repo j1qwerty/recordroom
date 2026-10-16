@@ -49,6 +49,15 @@ public sealed class PrivateDocumentStoreTests
     }
 
     [Fact]
+    public void DefaultCeilingStaysUnderTheReverseProxyLimit()
+    {
+        // nginx allows 50M on the deploy. If the API ceiling ever rises above
+        // that, oversized files die at the proxy with a bare 413 instead of
+        // reaching the friendly validation message here.
+        Assert.True(PrivateDocumentStore.DefaultMaxUploadBytes < 50L * 1024 * 1024);
+    }
+
+    [Fact]
     public async Task RejectsAnImageExtensionWhoseContentIsNotAnImage()
     {
         var root = Path.Combine(Path.GetTempPath(), "recordroom-doc-tests", Guid.NewGuid().ToString("N"));

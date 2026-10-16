@@ -26,7 +26,12 @@ public interface IPrivateDocumentStore
 /// <summary>Private filesystem storage; generated keys mean uploaded names are never filesystem paths.</summary>
 public sealed class PrivateDocumentStore : IPrivateDocumentStore
 {
-    public const long DefaultMaxUploadBytes = 512L * 1024 * 1024;
+    /// <summary>
+    /// 48 MiB. The reverse proxy in front of this API allows 50M, so this leaves
+    /// headroom for the multipart envelope and keeps the rejection message coming
+    /// from here rather than an opaque 413 from nginx.
+    /// </summary>
+    public const long DefaultMaxUploadBytes = 48L * 1024 * 1024;
     private readonly string _rootPath;
     public long MaxUploadBytes { get; }
 

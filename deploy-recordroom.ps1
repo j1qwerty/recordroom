@@ -268,6 +268,10 @@ command -v nginx >/dev/null || { echo "nginx missing"; exit 1; }
 command -v dotnet >/dev/null || { echo "dotnet missing"; exit 1; }
 
 mkdir -p "$approot" "$webroot" /var/lib/recordroom/data /etc/recordroom
+# Uploaded scans live outside $approot on purpose: the API deploy step below does
+# `rm -rf $approot`, so anything stored there is destroyed on the next release.
+docroot=/var/lib/recordroom/documents
+mkdir -p "$docroot"
 
 # --- server-side env (secrets generated once, preserved across deploys) ---
 # DB passwords are hex + 'Aa9!' so they always satisfy the SQL Server policy
@@ -326,6 +330,32 @@ else
 fi
 DB_PW=$(sed -n 's/^DB_PASSWORD=//p' "$envfile" | head -n 1)
 
+# --- document storage (applied on every deploy) ---------------------------
+# Kept outside the create/reuse branches above: an env file written by an older
+# deploy predates these keys, and only writing them on creation would leave that
+# VPS silently falling back to App_Data inside $approot -- which the API deploy
+# step deletes. upsert replaces any existing key so a changed value takes effect.
+upsert_env() {
+  key="$1"; value="$2"
+  if grep -q "^${key}=" "$envfile"; then
+    sed -i "s|^${key}=.*|${key}=${value}|" "$envfile"
+  else
+    printf '%s=%s\n' "$key" "$value" >> "$envfile"
+  fi
+}
+upsert_env FileStorage__RootPath "$docroot"
+# 48 MiB: nginx allows client_max_body_size 50M, so this leaves room for the
+# multipart envelope and keeps oversized files rejected by the API's own
+# validation message instead of an opaque proxy 413.
+upsert_env FileStorage__MaxUploadBytes "50331648"
+chmod 640 "$envfile"
+chown root:www-data "$envfile"
+
+# Fail loudly rather than let a future edit reintroduce the data-loss bug.
+case "$docroot/" in
+  "$approot"/*) echo "FATAL: FileStorage root '$docroot' is inside '$approot', which is wiped on every API deploy"; exit 1 ;;
+esac
+
 if [ "$MODE" = "api" ] || [ "$MODE" = "both" ]; then
   # --- SQL Server: database + login (idempotent) ---
   SA_PW=$(cat /root/pmwds-secrets/sa_password.txt)
@@ -370,6 +400,9 @@ EOF
   rm -f "$api_archive"
   test -f "$approot/RecordRoom.Api.dll"
   chown -R www-data:www-data "$approot" /var/lib/recordroom
+  # Uploaded scans must be writable by the service user and must survive `rm -rf $approot`.
+  chown -R www-data:www-data "$docroot"
+  chmod 750 "$docroot"
   cat > /etc/systemd/system/recordroom-api.service <<EOF
 [Unit]
 Description=Record Room dotnet API (bare IP, port $WEBPORT)
@@ -442,7 +475,14 @@ server {
     access_log /var/log/nginx/recordroom.access.log;
     error_log /var/log/nginx/recordroom.error.log;
 
+    # Must stay above the API's own 48 MiB document ceiling
+    # (FileStorage__MaxUploadBytes). If nginx were lower, oversized uploads
+    # would die here with a bare 413 before reaching the API's friendly error.
     client_max_body_size 50M;
+
+    # Uploads of tens of megabytes on a slow uplink need longer than the default.
+    client_body_timeout 300s;
+    send_timeout 300s;
 
     location /api/ {
         proxy_pass http://127.0.0.1:$APIPORT;
@@ -542,6 +582,28 @@ echo "recordroom $MODE deployed"
             Write-Ok "$ApiHealthUrl answers: $($healthPublic.Content)"
         } catch {
             Write-Warn "public API check failed ($($_.Exception.Message))"
+        }
+
+        if ($deployApi -or $Target -eq 'both') {
+            # Prove the document storage path is real and survives the wipe of
+            # $approot: write a probe, confirm it lands outside the app dir, then
+            # remove it. A misconfigured FileStorage__RootPath is silent otherwise.
+            $docProbe = Invoke-Checked ssh @('-o', 'BatchMode=yes', $Host_, @"
+set -eu
+root=`$(sed -n 's/^FileStorage__RootPath=//p' /etc/recordroom/recordroom.env | head -n 1)
+[ -n "`$root" ] || { echo 'MISSING_ROOT'; exit 1; }
+case "`$root" in /var/www/recordroom/app*) echo 'INSIDE_APP_DIR'; exit 1 ;; esac
+sudo -u www-data test -d "`$root" || { echo 'NOT_WRITABLE'; exit 1; }
+probe="`$root/.deploy-probe-`$(date +%s)"
+sudo -u www-data touch "`$probe"
+sudo -u www-data rm -f "`$probe"
+echo "DOCROOT_OK `$root"
+"@) -What 'document storage probe'
+            if ($docProbe -match 'DOCROOT_OK') {
+                Write-Ok "document storage writable and outside the app dir ($($docProbe.Trim()))"
+            } else {
+                Fail "document storage probe failed: $($docProbe.Trim())"
+            }
         }
 
         Write-Step 'Confirm SQL Server database'

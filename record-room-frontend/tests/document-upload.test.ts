@@ -36,9 +36,16 @@ describe('scanned document upload validation', () => {
 
   it('enforces the configured default ceiling and emits an input accept filter', () => {
     expect(validateDocumentFile(doc({ size: MAX_DOCUMENT_BYTES }))).toBeNull();
-    expect(validateDocumentFile(doc({ size: MAX_DOCUMENT_BYTES + 1 }))).toMatch(/512 mib/i);
+    expect(validateDocumentFile(doc({ size: MAX_DOCUMENT_BYTES + 1 }))).toMatch(/48 mib/i);
     expect(documentAcceptAttribute()).toContain('.pdf');
     expect(documentAcceptAttribute()).toContain('.png');
+  });
+
+  it('keeps the ceiling under the 50M the reverse proxy allows', () => {
+    // nginx rejects anything over 50M with an opaque 413 before the API is
+    // reached, so the client ceiling must sit below it or large A0 scans fail
+    // with no useful message.
+    expect(MAX_DOCUMENT_BYTES).toBeLessThan(50 * 1024 * 1024);
   });
 
   it('formats metadata sizes', () => {

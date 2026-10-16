@@ -4,7 +4,7 @@
 
 RecordRoom stores scanned bytes on the API host's private filesystem and records metadata in SQL Server. The files are not saved under `wwwroot` and are not exposed as static public assets. Every uploaded version receives a generated storage key and a SHA-256 checksum. The original filename, file type, byte size, version, uploader and timestamp are recorded alongside it.
 
-Supported extensions are PDF, JPG/JPEG, PNG and GIF. Both extension and file signature are checked by the API; the client-side file picker is only a convenience check. Default maximum size is 512 MiB. JPG/JPEG, PNG and GIF use the image preview; download is available for all allowed formats.
+Supported extensions are PDF, JPG/JPEG, PNG and GIF. Both extension and file signature are checked by the API; the client-side file picker is only a convenience check. Default maximum size is **48 MiB**. JPG/JPEG, PNG and GIF use the image preview; download is available for all allowed formats.
 
 ## Multipage PDFs
 
@@ -19,14 +19,18 @@ Page counting is a best-effort scan of the uncompressed object structure (`Appli
 Set these environment variables on the .NET API process:
 
 - `FileStorage__RootPath=/var/lib/recordroom/documents`
-- `FileStorage__MaxUploadBytes=536870912` (optional; omit to use the 512 MiB default, or set a smaller value)
+- `FileStorage__MaxUploadBytes=50331648` (optional; this is the 48 MiB default and also the ceiling)
+
+The nginx server block in `deploy-recordroom.ps1` sets `client_max_body_size 50M`. The two limits are deliberately different: nginx must allow slightly more than the API accepts, otherwise an oversized upload dies at the proxy as a bare `413` instead of returning the API's "Documents must be 48 MiB or smaller" message. If you raise one, raise both and keep the proxy above the API.
 
 Example Linux configuration:
 
 ```sh
 export FileStorage__RootPath=/var/lib/recordroom/documents
-export FileStorage__MaxUploadBytes=536870912
+export FileStorage__MaxUploadBytes=50331648
 ```
+
+`FileStorage__RootPath` **must not** point inside `/var/www/recordroom/app`. The deploy script deletes and recreates that directory on every API deploy, so documents stored there would be destroyed on the next release while their database rows and checksums survived.
 
 Create and mount `/var/lib/recordroom/documents` as a persistent volume and grant the API process write access. Do not put this directory behind a static web server. In a container deployment, mount a host volume at the same path. The default is `App_Data/documents` under the API content root, suitable for development only if that directory is persisted.
 
