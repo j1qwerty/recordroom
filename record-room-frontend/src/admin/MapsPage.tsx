@@ -33,7 +33,7 @@ export function MapsPage() {
   const canUpload = session.allowed('digitization.upload');
 
   const [search, setSearch] = useState(presetBarcode);
-  const [adding, setAdding] = useState(openUploadOnLoad);
+  const [adding, setAdding] = useState(openUploadOnLoad && canUpload);
   const [flash, setFlash] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
   // The API owns the filter, so re-running on every keystroke matches what the
@@ -71,9 +71,11 @@ export function MapsPage() {
         title="Maps & file copies"
         description="Scanned maps, drawings and copies attached to registry rows, with the version history the legacy upload_map table kept."
         actions={
-          <Button icon={<Plus size={17} />} onClick={() => setAdding(true)}>
-            Add map page
-          </Button>
+          canUpload && (
+            <Button icon={<Plus size={17} />} onClick={() => setAdding(true)}>
+              Add map page
+            </Button>
+          )
         }
       />
 
@@ -106,7 +108,7 @@ export function MapsPage() {
                   : 'Add a scanned map page to attach it to a registry row.'
               }
               action={
-                loading ? undefined : <Button onClick={() => setAdding(true)}>Add map page</Button>
+                loading || !canUpload ? undefined : <Button onClick={() => setAdding(true)}>Add map page</Button>
               }
             />
           </div>
@@ -170,12 +172,14 @@ export function MapsPage() {
                       </div>
                     </td>
                     <td className="px-5 py-4 text-right">
-                      <Button
-                        variant="ghost"
-                        onClick={() => remove(row.id)}
-                        aria-label={`Remove ${row.filename}`}
-                        icon={<Trash size={15} />}
-                      />
+                      {session.allowed('files.edit') && (
+                        <Button
+                          variant="ghost"
+                          onClick={() => remove(row.id)}
+                          aria-label={`Remove ${row.filename}`}
+                          icon={<Trash size={15} />}
+                        />
+                      )}
                     </td>
                   </tr>
                 ))}
