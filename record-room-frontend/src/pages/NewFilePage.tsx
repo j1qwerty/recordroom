@@ -209,6 +209,10 @@ export function NewFilePage() {
       form.position,
       form.area,
       form.pincode,
+      form.eOfficeReference,
+      form.fileType,
+      form.recordKind,
+      form.documentSize,
     ],
     [],
   );
@@ -350,7 +354,16 @@ export function NewFilePage() {
                       <SelectInput
                         id="file-type"
                         value={form.fileType}
-                        onChange={(event) => set('fileType', event.target.value as FileType)}
+                        onChange={(event) => {
+                          const fileType = event.target.value as FileType;
+                          setDraft((current) => ({
+                            ...current,
+                            fileType,
+                            ...(!recordKindManuallySet
+                              ? { recordKind: fileType === 'Map' || current.documentSize === 'A0' ? 'Map' : 'File' }
+                              : {}),
+                          }));
+                        }}
                       >
                         {FILE_TYPES.map((type) => (
                           <option key={type} value={type}>
@@ -359,11 +372,17 @@ export function NewFilePage() {
                         ))}
                       </SelectInput>
                     </Field>
-                    <Field label="E-office file name / ID" htmlFor="file-eoffice-reference" hint="Optional. Paste the filename or reference assigned by e-office.">
+                    <Field
+                      label="E-office file name / ID"
+                      htmlFor="file-eoffice-reference"
+                      hint="Optional. Paste the filename or reference assigned by e-office."
+                      error={errorsFor('eOfficeReference')}
+                    >
                       <TextInput
                         id="file-eoffice-reference"
                         value={form.eOfficeReference ?? ''}
                         onChange={(event) => set('eOfficeReference', event.target.value)}
+                        invalid={Boolean(errorsFor('eOfficeReference'))}
                         placeholder="e.g. EOFFICE/REV/2026/00123"
                       />
                     </Field>
@@ -389,7 +408,9 @@ export function NewFilePage() {
                           setDraft((current) => ({
                             ...current,
                             documentSize: size,
-                            ...(!recordKindManuallySet ? { recordKind: size === 'A0' ? 'Map' : 'File' } : {}),
+                            ...(!recordKindManuallySet
+                              ? { recordKind: size === 'A0' || current.fileType === 'Map' ? 'Map' : 'File' }
+                              : {}),
                           }));
                         }}
                       >
