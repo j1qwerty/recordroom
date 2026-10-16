@@ -81,7 +81,7 @@ export function DashboardPage() {
           {user && <p className="muted mt-2 text-xs">Signed in as {user.displayName || user.userName} · {user.role}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
-          <LinkButton to="/search" variant="outline" icon={<MagnifyingGlass size={17} />}>Search records</LinkButton>
+          <LinkButton to="/search" variant="secondary" icon={<MagnifyingGlass size={17} />}>Search records</LinkButton>
           {allowed('files.create') && <LinkButton to="/files/new" icon={<Files size={17} />}>Add file</LinkButton>}
         </div>
       </section>
