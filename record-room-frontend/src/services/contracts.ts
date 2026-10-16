@@ -183,6 +183,7 @@ export interface FileQuery {
   status?: FileStatus | 'All';
   recordKind?: RecordKind | 'All';
   fileType?: FileType | 'All';
+  eOfficeStatus?: 'All' | 'Linked' | 'Not linked';
   roomId?: string;
   sectionId?: string;
   shelfId?: string;
