@@ -134,7 +134,9 @@ public sealed record FileDto(
     string LastMovement,
     string? Holder,
     string? HolderEmployeeCode,
-    string Description);
+    string Description,
+    string RecordKind = "File",
+    string DocumentSize = "Other");
 
 public sealed record FileCreateInput(
     string FileBarcode,
@@ -150,7 +152,9 @@ public sealed record FileCreateInput(
     string PropertyArea,
     string Dealer,
     string CodalLife,
-    string Description);
+    string Description,
+    string RecordKind = "File",
+    string DocumentSize = "Other");
 
 public sealed record RelocateInput(int ShelfId, int Position, string Reason);
 
