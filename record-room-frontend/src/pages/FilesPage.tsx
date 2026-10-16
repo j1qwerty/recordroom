@@ -369,6 +369,16 @@ export function FilesPage() {
                         >
                           <MapPin size={17} />
                         </Link>
+                        {allowed('digitization.upload') && (
+                          <Link
+                            to={`/admin/maps?fileBarcode=${encodeURIComponent(file.fileBarcode)}&add=1`}
+                            className="focus-ring grid size-9 place-items-center rounded-lg muted hover:bg-[var(--rr-surface-2)] hover:text-accent"
+                            aria-label={`Upload map or copy for ${file.fileNumber}`}
+                            title="Upload map or copy"
+                          >
+                            <UploadSimple size={17} />
+                          </Link>
+                        )}
                       </div>
                     </td>
                   </tr>
