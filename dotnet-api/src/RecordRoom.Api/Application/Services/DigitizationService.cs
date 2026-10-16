@@ -202,7 +202,7 @@ public sealed class DigitizationService(
     public async Task<Result<DigitizationPageDto>> UploadPageDocumentAsync(
         long pageId, Microsoft.AspNetCore.Http.IFormFile? document, CancellationToken ct = default)
     {
-        var original = await db.Pages.Include(p => p.Batch!).FirstOrDefaultAsync(p => p.Id == pageId, ct);
+        var original = await db.Pages.Include(p => p.Batch!).ThenInclude(b => b.Pages).FirstOrDefaultAsync(p => p.Id == pageId, ct);
         if (original is null) return Result<DigitizationPageDto>.Fail("Page not found.", "pageId");
         if (original.Batch!.Status == BatchStatus.Approved)
             return Result<DigitizationPageDto>.Fail("Approved batches are read-only.", "pageId");
