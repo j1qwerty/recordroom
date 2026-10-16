@@ -16,6 +16,8 @@ import { log } from './audit';
 import { employeesService } from './employees';
 import { filesService } from './files';
 import { session } from './session';
+import { localDocumentBlob, localDocumentInfo, saveLocalRowDocument } from './document-storage';
+import { validateDocumentFile } from '../../lib/document';
 
 function batchStatus(pages: DigitizationPage[], submitted: boolean): BatchStatus {
   const reviewable = pages.filter(
@@ -164,6 +166,36 @@ export const digitizationService: DigitizationApi = {
       });
     });
     return ok(page);
+  },
+
+  async uploadPageDocument(pageId, file) {
+    const issue = validateDocumentFile(file);
+    if (issue) return err(issue, 'document');
+    const state = store.getState();
+    const owner = state.batches.find((batch) => batch.pages.some((page) => page.id === pageId));
+    const page = owner?.pages.find((row) => row.id === pageId);
+    if (!owner || !page) return err('Page not found.', 'pageId');
+    if (owner.status === 'Approved') return err('Approved batches are read-only.', 'pageId');
+
+    const created = await digitizationService.uploadPage(owner.id, {
+      fileBarcode: page.fileBarcode,
+      pageNo: page.pageNo,
+      filename: file.name,
+      bulk: page.bulk,
+    });
+    if (!created.ok) return created;
+    const info = saveLocalRowDocument('page', created.value.id, file);
+    const updated = { ...created.value, ...info, hasDocument: true };
+    store.update((draft) => {
+      const target = draft.batches.find((batch) => batch.id === owner.id);
+      const index = target?.pages.findIndex((row) => row.id === created.value.id) ?? -1;
+      if (target && index >= 0) target.pages[index] = updated;
+    });
+    return ok(updated);
+  },
+
+  async pageBlob(pageId) {
+    return localDocumentBlob('page', pageId);
   },
 
   async removePage(pageId) {
