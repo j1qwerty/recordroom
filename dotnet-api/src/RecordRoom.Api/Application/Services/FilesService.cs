@@ -372,6 +372,44 @@ public sealed class FilesService(
         return Result<FileDto>.Ok(ToDto(file, unit.Section, unit, room));
     }
 
+    public async Task<Result<FileDto>> UpdateEOfficeReferenceAsync(
+        int id,
+        EOfficeReferenceInput input,
+        CancellationToken ct = default)
+    {
+        var file = await db.Files.FirstOrDefaultAsync(f => f.Id == id, ct);
+        if (file is null) return Result<FileDto>.Fail("File not found.", "id");
+
+        var reference = input.EOfficeReference?.Trim();
+        if (reference?.Length > 200)
+            return Result<FileDto>.Fail(
+                "E-office reference must be 200 characters or fewer.",
+                "eOfficeReference");
+
+        var previous = file.EOfficeReference;
+        file.EOfficeReference = string.IsNullOrWhiteSpace(reference) ? null : reference;
+        file.UpdatedAt = DateTime.UtcNow;
+        file.UpdatedBy = current.UserName;
+
+        await audit.LogAsync(
+            db,
+            AuditAction.Update,
+            "RecordFile",
+            file.Id.ToString(),
+            previous ?? "Not linked",
+            file.EOfficeReference ?? "Not linked",
+            $"Updated e-office reference for {file.Barcode}");
+        await db.SaveChangesAsync(ct);
+
+        await audit.AnnounceAsync(
+            RealtimeChannels.Files,
+            "file.updated",
+            file.Id.ToString(),
+            $"E-office reference updated for {file.Barcode}");
+
+        return Result<FileDto>.Ok(await ProjectAsync(file, ct) ?? ToDto(file, null, null, null));
+    }
+
     public async Task<Result<bool>> DeleteAsync(int id, CancellationToken ct)
     {
         var file = await db.Files.FirstOrDefaultAsync(f => f.Id == id, ct);
