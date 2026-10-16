@@ -41,7 +41,9 @@ public sealed class FileQuery
 public sealed class FilesService(
     AppDbContext db,
     IAuditWriter audit,
-    ICurrentUserAccessor current) : IFilesService
+    ICurrentUserAccessor current,
+    IPrivateDocumentStore documentStore,
+    ILogger<FilesService> logger) : IFilesService
 {
     private const int MaxPosition = 100;
 
@@ -418,6 +420,11 @@ public sealed class FilesService(
         if (file.Status == RecordStatus.Issued)
             return Result<bool>.Fail("This file is issued. Return it before deleting the registry row.", "id");
 
+        var documentKeys = await db.FileDocuments.AsNoTracking()
+            .Where(document => document.RecordFileId == id)
+            .Select(document => document.StorageKey)
+            .ToArrayAsync(ct);
+
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         db.Files.Remove(file);
         await db.SaveChangesAsync(ct);
@@ -430,6 +437,15 @@ public sealed class FilesService(
             $"Registry row removed for {file.Barcode}");
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
+
+        foreach (var key in documentKeys)
+        {
+            try { await documentStorage.DeleteAsync(key, CancellationToken.None); }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Could not remove attachment content {StorageKey} after record {FileId} deletion.", key, id);
+            }
+        }
 
         await audit.AnnounceAsync(RealtimeChannels.Files, "file.deleted", id.ToString(),
             $"{file.Barcode} removed from the registry");
