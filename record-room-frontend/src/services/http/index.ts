@@ -27,17 +27,7 @@ import type {
   AuditApi,
 } from '../contracts';
 import { err, ok } from '../contracts';
-import {
-  attempt,
-  get,
-  post,
-  qs,
-  readStoredKey,
-  send,
-  setToken,
-  toApiId,
-  toFieldIssues,
-} from './client';
+import { attempt, get, getToken, post, qs, send, setToken, toApiId, toFieldIssues } from './client';
 import {
   toAppUser,
   toArea,
@@ -85,18 +75,10 @@ const list = <T>(value: unknown, map: (dto: Dto) => T): T[] =>
 
 // ------------------------------------------------------------------- auth
 
-const AUTH_CACHE_KEY = 'rr-user';
-
-function cacheUser(user: unknown): void {
-  try {
-    if (typeof localStorage === 'undefined') return;
-    if (user) localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify(user));
-    else localStorage.removeItem(AUTH_CACHE_KEY);
-  } catch {
-    /* storage is optional; the in-memory token is what sign-in depends on */
-  }
-}
-
+// `session` is the single source of truth for who is signed in: the route guard,
+// the shell and the permission checks all read it. The adapter writes to it
+// rather than keeping a second cache of its own, which is what previously let a
+// sign-out clear the token while the guard still believed it was signed in.
 export const httpAuthService: AuthApi = {
   async signIn(userName, password) {
     const result = await attempt<Dto>('POST', '/api/auth/login', { userName, password });
@@ -106,7 +88,6 @@ export const httpAuthService: AuthApi = {
     setToken(str(data.token));
     const user = toAppUser(data.user as Dto);
     session.set(user);
-    cacheUser(user);
     return ok(user);
   },
 
@@ -130,7 +111,6 @@ export const httpAuthService: AuthApi = {
     setToken(str(result.value.token));
     const user = toAppUser(result.value.user as Dto);
     session.set(user);
-    cacheUser(user);
     return ok(user);
   },
 
@@ -140,7 +120,6 @@ export const httpAuthService: AuthApi = {
     setToken(str(result.value.token));
     const user = toAppUser(result.value.user as Dto);
     session.set(user);
-    cacheUser(user);
     return ok(user);
   },
 
@@ -166,33 +145,23 @@ export const httpAuthService: AuthApi = {
   },
 
   async signOut() {
-    // Best effort: a failed sign-out must not leave the client stuck signed in.
-    try {
-      await send('POST', '/api/auth/logout');
-    } catch {
-      /* the token is cleared regardless */
-    }
+    // The token is read synchronously by raw() before it awaits, so the server
+    // still records the logout even though the token is cleared next.
+    const notified = getToken()
+      ? send('POST', '/api/auth/logout').catch(() => undefined)
+      : Promise.resolve();
+
+    // Local state is cleared without waiting on the network. Signing out must
+    // never be gated on a round trip: the route guard redirects as soon as the
+    // session becomes null.
     setToken(null);
     session.set(null);
-    cacheUser(null);
+
+    await notified;
   },
 
-  currentUser() {
-    const live = session.get();
-    if (live) return live;
-    const raw = readStoredKey(AUTH_CACHE_KEY);
-    if (!raw) return null;
-    try {
-      return JSON.parse(raw) as ReturnType<typeof toAppUser>;
-    } catch {
-      return null;
-    }
-  },
-
-  setCurrentUser(user) {
-    session.set(user);
-    cacheUser(user);
-  },
+  currentUser: () => session.get(),
+  setCurrentUser: (user) => session.set(user),
 
   demoPassword: 'Demo@12345',
 };

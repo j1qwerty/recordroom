@@ -187,10 +187,13 @@ export function Sidebar({ mobileOpen, onClose }: { mobileOpen: boolean; onClose:
                   {user ? `${user.role} · ${user.userName}` : 'No session'}
                 </p>
               </div>
+              {/* Same danger affordance as the top bar button: signing out ends the
+                  session, so it gets a fill and a colour change rather than a
+                  faint icon tint. */}
               <button
                 type="button"
                 onClick={signOut}
-                className="focus-ring rounded-lg p-1.5 muted hover:text-[var(--rr-danger)]"
+                className="focus-ring rounded-lg p-1.5 muted transition-colors hover:bg-[var(--rr-danger)] hover:text-white"
                 aria-label="Sign out"
                 title="Sign out"
               >

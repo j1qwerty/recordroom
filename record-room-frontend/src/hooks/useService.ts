@@ -122,10 +122,13 @@ export function useService(): RecordRoomService {
 
 /** Signed-in user plus role-derived permission checks. */
 export function useSession() {
-  // Re-render whenever the store publishes, so permissions stay in step with
-  // role edits made elsewhere in the session.
+  // Both subscriptions are needed: the store so a role edited elsewhere in the
+  // session is reflected, and the session itself so sign-in and sign-out
+  // re-render the shell. Over HTTP a sign-out touches neither the store nor a
+  // page query, so without the second subscription the header would keep showing
+  // a signed-in user.
   useDb();
-  const user = session.get();
+  const user = useSyncExternalStore(session.subscribe, session.get, session.get);
 
   const signIn = useCallback((userName: string, password: string) => {
     return service.auth.signIn(userName, password);

@@ -1,21 +1,32 @@
 import type { ReactNode } from 'react';
+import { useSyncExternalStore } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { session } from '../services/impl/session';
 import { useDb } from '../hooks/useService';
 import { can, type Permission } from '../services/permissions';
+import type { AppUser } from '../types';
+
+/**
+ * Re-renders when the session changes.
+ *
+ * Subscribing to the session rather than the store is what makes sign-out
+ * redirect. Over HTTP a sign-out writes nothing to the store, so a guard that
+ * only watched the store would keep rendering the app with a dead token.
+ */
+function useSessionUser(): AppUser | null {
+  return useSyncExternalStore(session.subscribe, session.get, session.get);
+}
 
 /**
  * Client-side session gate.
  *
- * `useDb()` is subscribed deliberately: a page reached by deep link must
- * re-evaluate the session after a sign-out elsewhere in the app. This is UX
- * gating only — `docs/SECURITY.md` requires the .NET 10 API to authorize every
- * request independently.
+ * This is UX gating only — `docs/SECURITY.md` requires the .NET 10 API to
+ * authorize every request independently.
  */
 export function RequireAuth({ children }: { children: ReactNode }) {
   useDb();
   const location = useLocation();
-  const user = session.get();
+  const user = useSessionUser();
 
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   return <>{children}</>;
@@ -31,7 +42,7 @@ export function RequirePermission({
   fallback?: ReactNode;
 }) {
   useDb();
-  const user = session.get();
+  const user = useSessionUser();
   if (!user) return <Navigate to="/login" replace />;
   if (can(user.role, permission)) return <>{children}</>;
   return (

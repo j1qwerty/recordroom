@@ -46,9 +46,12 @@ export function Topbar({
         >
           {dark ? <Sun size={19} /> : <Moon size={19} />}
         </button>
+        {/* Signing out is destructive and leaves the app, so the affordance is
+            a danger fill rather than the neutral surface tint the other icon
+            buttons use. A colour shift alone was too easy to miss. */}
         <button
           onClick={signOut}
-          className="focus-ring rounded-lg p-2.5 hover:bg-[var(--rr-surface-2)]"
+          className="focus-ring rounded-lg p-2.5 muted transition-colors hover:bg-[var(--rr-danger)] hover:text-white"
           aria-label="Sign out"
           title="Sign out"
         >

@@ -199,6 +199,12 @@ export const authService: AuthApi = {
   async signOut() {
     const user = session.get();
     if (!user) return;
+
+    // Cleared before the audit write, so the route guard redirects without
+    // waiting for anything. The actor is captured above because the write needs
+    // to know who is leaving.
+    session.set(null);
+
     store.update((draft) => {
       const entry = draft.loginHistory.find(
         (row) =>
@@ -214,7 +220,6 @@ export const authService: AuthApi = {
         summary: `${user.userName} signed out`,
       });
     });
-    session.set(null);
   },
 
   currentUser: () => session.get(),

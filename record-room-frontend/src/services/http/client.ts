@@ -87,11 +87,6 @@ export function getToken(): string | null {
   return token;
 }
 
-/** Exposed so the auth adapter can cache the signed-in user alongside the token. */
-export function readStoredKey(key: string): string | null {
-  return readStored(key);
-}
-
 export function apiBase(): string {
   return BASE;
 }
