@@ -124,11 +124,16 @@ public sealed class LocationsService(
             Status = RoomStatus.Operational,
         };
 
-        db.Rooms.Add(room);
-        await db.SaveChangesAsync(ct);
-        await audit.LogAsync(db, AuditAction.Create, "Room", room.Id.ToString(),
-            "-", $"{room.Code} / {room.Name}", $"Room {room.Code} created");
-        await db.SaveChangesAsync(ct);
+        await using (var tx = await db.Database.BeginTransactionAsync(ct))
+        {
+            db.Rooms.Add(room);
+            await db.SaveChangesAsync(ct);
+            await audit.LogAsync(db, AuditAction.Create, "Room", room.Id.ToString(),
+                "-", $"{room.Code} / {room.Name}", $"Room {room.Code} created");
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        }
+
         await audit.AnnounceAsync(RealtimeChannels.Locations, "room.created", room.Id.ToString(),
             $"Room {room.Code} created");
 
