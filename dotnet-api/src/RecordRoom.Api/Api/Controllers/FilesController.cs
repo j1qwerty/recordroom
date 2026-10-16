@@ -102,7 +102,7 @@ public class FilesController(IFilesService files) : ControllerBase
         ApiResults.FromResult(await files.UpdateEOfficeReferenceAsync(id, input, ct));
 
     [Authorize(Roles = "Admin,Supervisor")]
-    [HttpDelete("{id:int}")
+    [HttpDelete("{id:int}")]
     public async Task<IResult> Delete(int id, CancellationToken ct) =>
         ApiResults.FromResult(await files.DeleteAsync(id, ct));
 }
