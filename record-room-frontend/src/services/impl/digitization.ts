@@ -16,7 +16,7 @@ import { log } from './audit';
 import { employeesService } from './employees';
 import { filesService } from './files';
 import { session } from './session';
-import { localDocumentBlob, localDocumentInfo, saveLocalRowDocument } from './document-storage';
+import { localDocumentBlob, saveLocalRowDocument } from './document-storage';
 import { validateDocumentFile } from '../../lib/document';
 
 function batchStatus(pages: DigitizationPage[], submitted: boolean): BatchStatus {
