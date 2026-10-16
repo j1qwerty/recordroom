@@ -33,6 +33,9 @@ pnpm-debug.log*
 .env.*
 !.env.example
 
+# Private scanned documents are runtime data, not source files.
+/dotnet-api/src/RecordRoom.Api/App_Data/documents/
+
 # .NET (future dotnet-api/)
 [Bb]in/
 [Oo]bj/

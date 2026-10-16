@@ -28,6 +28,7 @@ import type {
   MapUpload,
   MovementEvent,
   RecordFile,
+  RecordFileDocument,
   ReportDefinition,
   Room,
   ScanResult,
@@ -208,9 +209,11 @@ export function toFile(dto: Record<string, unknown>): RecordFile {
     status: str(dto.status) as RecordFile['status'],
     location: str(dto.location),
     roomId: dto.roomId === null || dto.roomId === undefined ? '' : toId(dto.roomId as number),
-    sectionId: dto.sectionId === null || dto.sectionId === undefined ? '' : toId(dto.sectionId as number),
+    sectionId:
+      dto.sectionId === null || dto.sectionId === undefined ? '' : toId(dto.sectionId as number),
     section: str(dto.section),
-    almirahId: dto.almirahId === null || dto.almirahId === undefined ? '' : toId(dto.almirahId as number),
+    almirahId:
+      dto.almirahId === null || dto.almirahId === undefined ? '' : toId(dto.almirahId as number),
     almirah: str(dto.almirah),
     shelfId: dto.shelfId === null || dto.shelfId === undefined ? '' : toId(dto.shelfId as number),
     shelf: str(dto.shelf),
@@ -356,6 +359,12 @@ export function toPage(dto: Record<string, unknown>): DigitizationPage {
     uploadedAt: str(dto.uploadedAt),
     uploadedBy: str(dto.uploadedBy),
     bulk: dto.bulk === true,
+    hasDocument: dto.hasDocument === true,
+    contentType: dto.contentType ? str(dto.contentType) : undefined,
+    sizeBytes: dto.sizeBytes == null ? undefined : num(dto.sizeBytes),
+    sha256: dto.sha256 ? str(dto.sha256) : undefined,
+    pageCount: dto.pageCount == null ? undefined : num(dto.pageCount),
+    pageIndex: dto.pageIndex == null ? undefined : num(dto.pageIndex),
   };
 }
 
@@ -386,6 +395,28 @@ export function toMapUpload(dto: Record<string, unknown>): MapUpload {
     uploadedAt: str(dto.uploadedAt),
     uploadedBy: str(dto.uploadedBy),
     sizeKb: num(dto.sizeKb),
+    hasDocument: dto.hasDocument === true,
+    contentType: dto.contentType ? str(dto.contentType) : undefined,
+    sizeBytes: dto.sizeBytes == null ? undefined : num(dto.sizeBytes),
+    sha256: dto.sha256 ? str(dto.sha256) : undefined,
+    pageCount: dto.pageCount == null ? undefined : num(dto.pageCount),
+    pageIndex: dto.pageIndex == null ? undefined : num(dto.pageIndex),
+  };
+}
+
+export function toRecordFileDocument(dto: Record<string, unknown>): RecordFileDocument {
+  return {
+    id: toId(dto.id as number),
+    fileId: toId(dto.fileId as number),
+    fileBarcode: str(dto.fileBarcode),
+    version: num(dto.version, 1),
+    filename: str(dto.fileName),
+    contentType: str(dto.contentType),
+    sizeBytes: num(dto.sizeBytes),
+    sha256: str(dto.sha256),
+    uploadedAt: str(dto.uploadedAt),
+    uploadedBy: str(dto.uploadedBy),
+    pageCount: dto.pageCount == null ? undefined : num(dto.pageCount),
   };
 }
 

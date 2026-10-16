@@ -315,6 +315,14 @@ export interface DigitizationPage {
   uploadedAt: string;
   uploadedBy: string;
   bulk: boolean;
+  hasDocument?: boolean;
+  contentType?: string;
+  sizeBytes?: number;
+  sha256?: string;
+  /** Pages in a stored PDF; absent when the count is unknown. */
+  pageCount?: number;
+  /** 1-based page inside a multi-page PDF that this row represents. */
+  pageIndex?: number;
 }
 
 export interface DigitizationBatch {
@@ -342,6 +350,30 @@ export interface MapUpload {
   uploadedAt: string;
   uploadedBy: string;
   sizeKb: number;
+  hasDocument?: boolean;
+  contentType?: string;
+  sizeBytes?: number;
+  sha256?: string;
+  /** Pages in a stored PDF; absent when the count is unknown. */
+  pageCount?: number;
+  /** 1-based page inside a multi-page PDF that this row represents. */
+  pageIndex?: number;
+}
+
+/** File-level attachment metadata. Uploaded bytes are served by an authenticated endpoint. */
+export interface RecordFileDocument {
+  id: string;
+  fileId: string;
+  fileBarcode: string;
+  version: number;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+  sha256: string;
+  uploadedAt: string;
+  uploadedBy: string;
+  /** Pages in a stored PDF; absent when the count is unknown. */
+  pageCount?: number;
 }
 
 // ------------------------------------------------------------------- barcodes

@@ -12,6 +12,7 @@ import type { FileCreateInput, RecordFile, Room, Section, Shelf, StorageUnit } f
 import { log } from './audit';
 import { locationsService } from './locations';
 import { session } from './session';
+import { addLocalRecordDocument, listLocalRecordDocuments, localRecordDocumentBlob } from './document-storage';
 
 const MAX_POSITION = 100;
 const RF_PREFIX = 'RF-';
@@ -409,6 +410,31 @@ export const filesService: FilesApi = {
       });
     });
     return ok(updated);
+  },
+
+  async listDocuments(fileId) {
+    return listLocalRecordDocuments(fileId);
+  },
+
+  async uploadDocument(fileId, file) {
+    const record = await filesService.get(fileId);
+    if (!record) return err('File not found.', 'fileId');
+    const result = await addLocalRecordDocument(fileId, record.fileBarcode, file);
+    if (result.ok) {
+      store.update((draft) => log(draft, {
+        action: 'Create',
+        entity: 'RecordFileDocument',
+        entityId: result.value.id,
+        before: '—',
+        after: `${result.value.filename} · v${result.value.version}`,
+        summary: `PDF/image attachment added for ${record.fileBarcode}`,
+      }));
+    }
+    return result;
+  },
+
+  async documentBlob(fileId, documentId) {
+    return localRecordDocumentBlob(fileId, documentId);
   },
 
   async remove(fileId) {

@@ -11,6 +11,8 @@ public interface IDigitizationService
     Task<DigitizationBatchDto[]> BatchesAsync(string? employeeCode, string? folder, string? status, string? search, CancellationToken ct = default);
     Task<DigitizationBatchDto?> BatchAsync(long id, CancellationToken ct = default);
     Task<Result<DigitizationBatchDto>> CreateBatchAsync(BatchCreateInput input, CancellationToken ct = default);
+    Task<Result<DigitizationPageDto>> UploadPageDocumentAsync(long pageId, Microsoft.AspNetCore.Http.IFormFile? document, CancellationToken ct = default);
+    Task<PrivateDocumentContent?> OpenPageDocumentAsync(long pageId, CancellationToken ct = default);
     Task<Result<DigitizationPageDto>> UploadPageAsync(long batchId, PageUploadInput input, CancellationToken ct = default);
     Task<Result<bool>> RemovePageAsync(long pageId, CancellationToken ct = default);
     Task<Result<DigitizationPageDto>> ReviewPageAsync(long pageId, PageReviewInput input, CancellationToken ct = default);
@@ -21,11 +23,15 @@ public interface IDigitizationService
 public sealed class DigitizationService(
     AppDbContext db,
     IAuditWriter audit,
-    ICurrentUserAccessor current) : IDigitizationService
+    ICurrentUserAccessor current,
+    IPrivateDocumentStore documentStore,
+    ILogger<DigitizationService> logger) : IDigitizationService
 {
     private static DigitizationPageDto ToPage(DigitizationPage p) => new(
         p.Id, p.BatchId, p.Barcode, p.FileName, p.PageNo, p.Version,
-        Display.Page(p.Status), p.Note, p.UploadedAt, p.UploadedBy, p.Bulk);
+        Display.Page(p.Status), p.Note, p.UploadedAt, p.UploadedBy, p.Bulk,
+        !string.IsNullOrWhiteSpace(p.StorageKey), p.ContentType, p.SizeBytes, p.Sha256,
+        p.PageCount, p.PageIndex);
 
     private static DigitizationBatchDto ToBatch(DigitizationBatch b) => new(
         b.Id, b.Code, b.EmployeeCode, b.EmployeeName, b.Department,
@@ -193,6 +199,67 @@ public sealed class DigitizationService(
         return Result<DigitizationPageDto>.Ok(ToPage(page));
     }
 
+
+    public async Task<Result<DigitizationPageDto>> UploadPageDocumentAsync(
+        long pageId, Microsoft.AspNetCore.Http.IFormFile? document, CancellationToken ct = default)
+    {
+        var original = await db.Pages.Include(p => p.Batch!).ThenInclude(b => b.Pages).FirstOrDefaultAsync(p => p.Id == pageId, ct);
+        if (original is null) return Result<DigitizationPageDto>.Fail("Page not found.", "pageId");
+        if (original.Batch!.Status == BatchStatus.Approved)
+            return Result<DigitizationPageDto>.Fail("Approved batches are read-only.", "pageId");
+
+        var storedResult = await documentStore.SaveAsync(document, ct);
+        if (!storedResult.IsSuccess) return Result<DigitizationPageDto>.Fail(storedResult.Errors);
+        var stored = storedResult.Value;
+        var version = (await db.Pages.AsNoTracking()
+            .Where(p => p.Barcode == original.Barcode && p.PageNo == original.PageNo)
+            .Select(p => (int?)p.Version).MaxAsync(ct) ?? 0) + 1;
+        var hasActive = await db.Pages.AnyAsync(p =>
+            p.Barcode == original.Barcode && p.PageNo == original.PageNo && p.Status == PageStatus.Active, ct);
+        var page = new DigitizationPage
+        {
+            BatchId = original.BatchId, Barcode = original.Barcode, FileName = stored.OriginalFileName,
+            PageNo = original.PageNo, Version = version,
+            Status = version > 1 && hasActive ? PageStatus.Duplicate : PageStatus.PendingReview,
+            Note = $"Uploaded document version {version} for page {original.PageNo}.",
+            UploadedAt = DateTime.UtcNow, UploadedBy = current.UserName, Bulk = original.Bulk,
+            StorageKey = stored.StorageKey, ContentType = stored.ContentType, SizeBytes = stored.SizeBytes, Sha256 = stored.Sha256,
+            PageCount = stored.PageCount
+        };
+        db.Pages.Add(page);
+        original.Batch.Pages.Add(page);
+        original.Batch.Status = RecomputeStatus(original.Batch);
+        await audit.LogAsync(db, AuditAction.Create, "DigitizationPage", "pending",
+            $"page={page.PageNo}; version={version - 1}",
+            $"{stored.OriginalFileName}; version={version}; bytes={stored.SizeBytes}; sha256={stored.Sha256}",
+            $"Uploaded {stored.OriginalFileName} as version {version} for {original.Barcode}", ct);
+        try { await db.SaveChangesAsync(ct); }
+        catch (DbUpdateException ex)
+        {
+            logger.LogWarning(ex, "Could not register document version {Version} for page {PageId}.", version, pageId);
+            await TryDeleteAsync(stored.StorageKey);
+            return Result<DigitizationPageDto>.Fail("This page was updated by another upload. Please retry.", "document");
+        }
+        catch { await TryDeleteAsync(stored.StorageKey); throw; }
+        await audit.AnnounceAsync(RealtimeChannels.Digitization, "page.added", page.BatchId.ToString(),
+            $"{stored.OriginalFileName} added as version {version}");
+        return Result<DigitizationPageDto>.Ok(ToPage(page));
+    }
+
+    public async Task<PrivateDocumentContent?> OpenPageDocumentAsync(long pageId, CancellationToken ct = default)
+    {
+        var page = await db.Pages.AsNoTracking().FirstOrDefaultAsync(p => p.Id == pageId, ct);
+        if (page?.StorageKey is null || page.ContentType is null || page.Sha256 is null) return null;
+        var stream = await documentStore.OpenReadAsync(page.StorageKey, ct);
+        return stream is null ? null : new PrivateDocumentContent(page.FileName, page.ContentType, page.SizeBytes ?? 0, page.Sha256, stream);
+    }
+
+    private async Task TryDeleteAsync(string storageKey)
+    {
+        try { await documentStore.DeleteAsync(storageKey, CancellationToken.None); }
+        catch (Exception ex) { logger.LogError(ex, "Could not clean up document key {StorageKey}.", storageKey); }
+    }
+
     public async Task<Result<bool>> RemovePageAsync(long pageId, CancellationToken ct)
     {
         var page = await db.Pages.Include(p => p.Batch!).FirstOrDefaultAsync(p => p.Id == pageId, ct);
@@ -200,12 +267,14 @@ public sealed class DigitizationService(
         if (page.Batch!.Status == BatchStatus.Approved)
             return Result<bool>.Fail("Approved batches are read-only.", "pageId");
 
+        var storageKey = page.StorageKey;
         db.Pages.Remove(page);
         page.Batch.Pages.Remove(page);
         page.Batch.Status = RecomputeStatus(page.Batch);
         await audit.LogAsync(db, AuditAction.Delete, "DigitizationPage", pageId.ToString(),
             $"{page.FileName} v{page.Version}", "deleted", $"Page removed from {page.Batch.Code}");
         await db.SaveChangesAsync(ct);
+        if (!string.IsNullOrWhiteSpace(storageKey)) await TryDeleteAsync(storageKey);
         await audit.AnnounceAsync(RealtimeChannels.Digitization, "page.removed", page.BatchId.ToString(),
             $"{page.FileName} removed from {page.Batch.Code}");
         return Result<bool>.Ok(true);

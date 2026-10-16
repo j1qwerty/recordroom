@@ -44,6 +44,25 @@ public class DigitizationController(IDigitizationService digitization) : Control
     public async Task<IResult> UploadPage(long id, PageUploadInput input, CancellationToken ct) =>
         ApiResults.FromResult(await digitization.UploadPageAsync(id, input, ct));
 
+    [Authorize(Roles = "Admin,Supervisor,Operator")]
+    [HttpPost("pages/{pageId:long}/document")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(538968064)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 538968064)]
+    public async Task<IResult> UploadPageDocument(long pageId, [FromForm] IFormFile? document, CancellationToken ct) =>
+        ApiResults.FromResult(await digitization.UploadPageDocumentAsync(pageId, document, ct));
+
+    [HttpGet("pages/{pageId:long}/content")]
+    public async Task<IActionResult> PageContent(long pageId, [FromQuery] bool download = false, CancellationToken ct = default)
+    {
+        var item = await digitization.OpenPageDocumentAsync(pageId, ct);
+        if (item is null) return NotFound();
+        Response.Headers["Cache-Control"] = "private, no-store";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        Response.Headers["Content-Disposition"] = DocumentHttpHeaders.BuildDisposition(item.FileName, download);
+        return File(item.Stream, item.ContentType, enableRangeProcessing: true);
+    }
+
     [Authorize(Roles = "Admin,Supervisor")]
     [HttpDelete("pages/{pageId:long}")]
     public async Task<IResult> RemovePage(long pageId, CancellationToken ct) =>
@@ -58,6 +77,18 @@ public class DigitizationController(IDigitizationService digitization) : Control
     [HttpPost("batches/{id:long}/review")]
     public async Task<IResult> ReviewBatch(long id, PageReviewInput input, CancellationToken ct) =>
         ApiResults.FromResult(await digitization.ReviewBatchAsync(id, input, ct));
+}
+
+internal static class DocumentHttpHeaders
+{
+    public static string BuildDisposition(string fileName, bool download)
+    {
+        var disposition = new Microsoft.Net.Http.Headers.ContentDispositionHeaderValue(download ? "attachment" : "inline")
+        {
+            FileNameStar = fileName
+        };
+        return disposition.ToString();
+    }
 }
 
 [ApiController]
@@ -75,6 +106,25 @@ public class UploadsController(IUploadsService uploads) : ControllerBase
     [HttpPost("maps")]
     public async Task<IResult> AddMap(MapUploadInput input, CancellationToken ct) =>
         ApiResults.FromResult(await uploads.AddMapAsync(input, ct));
+
+    [Authorize(Roles = "Admin,Supervisor,Operator")]
+    [HttpPost("maps/{id:long}/document")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(538968064)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 538968064)]
+    public async Task<IResult> UploadMapDocument(long id, [FromForm] IFormFile? document, CancellationToken ct) =>
+        ApiResults.FromResult(await uploads.UploadMapDocumentAsync(id, document, ct));
+
+    [HttpGet("maps/{id:long}/content")]
+    public async Task<IActionResult> MapContent(long id, [FromQuery] bool download = false, CancellationToken ct = default)
+    {
+        var item = await uploads.OpenMapDocumentAsync(id, ct);
+        if (item is null) return NotFound();
+        Response.Headers["Cache-Control"] = "private, no-store";
+        Response.Headers["X-Content-Type-Options"] = "nosniff";
+        Response.Headers["Content-Disposition"] = DocumentHttpHeaders.BuildDisposition(item.FileName, download);
+        return File(item.Stream, item.ContentType, enableRangeProcessing: true);
+    }
 
     [HttpDelete("maps/{id:long}")]
     public async Task<IResult> RemoveMap(long id, CancellationToken ct) =>

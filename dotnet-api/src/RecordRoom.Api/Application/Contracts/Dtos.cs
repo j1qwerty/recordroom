@@ -278,7 +278,13 @@ public sealed record DigitizationPageDto(
     string Note,
     DateTime UploadedAt,
     string UploadedBy,
-    bool Bulk);
+    bool Bulk,
+    bool HasDocument = false,
+    string? ContentType = null,
+    long? SizeBytes = null,
+    string? Sha256 = null,
+    int? PageCount = null,
+    int? PageIndex = null);
 
 public sealed record DigitizationBatchDto(
     long Id,
@@ -309,9 +315,20 @@ public sealed record MapUploadDto(
     string Status,
     DateTime UploadedAt,
     string UploadedBy,
-    int SizeKb);
+    int SizeKb,
+    bool HasDocument = false,
+    string? ContentType = null,
+    long? SizeBytes = null,
+    string? Sha256 = null,
+    int? PageCount = null,
+    int? PageIndex = null);
 
 public sealed record MapUploadInput(string FileBarcode, int PageNo, string FileName, int SizeKb);
+
+public sealed record RecordFileDocumentDto(
+    long Id, int FileId, string FileBarcode, int Version, string FileName,
+    string ContentType, long SizeBytes, string Sha256, DateTime UploadedAt, string UploadedBy,
+    int? PageCount = null);
 
 // Bulk ------------------------------------------------------------------------
 

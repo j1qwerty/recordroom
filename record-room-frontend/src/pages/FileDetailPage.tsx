@@ -20,6 +20,7 @@ import { Field, SelectInput, TextInput } from '../components/ui/Field';
 import { Flash, StatusBadge } from '../components/ui/Flash';
 import { BarcodeSymbol } from '../components/BarcodeSymbol';
 import { ShelfView } from '../components/ShelfView';
+import { DocumentUploadActions } from '../components/DocumentUploadActions';
 import { useQuery, useService, useSession } from '../hooks/useService';
 import { buildPayload } from '../lib/barcode';
 import type { Page } from '../services/contracts';
@@ -30,6 +31,7 @@ import type {
   MapUpload,
   MovementEvent,
   RecordFile,
+  RecordFileDocument,
   Room,
 } from '../types';
 
@@ -37,6 +39,7 @@ const EMPTY_ROOMS: Room[] = [];
 const EMPTY_MOVEMENTS: MovementEvent[] = [];
 const EMPTY_BATCHES: DigitizationBatch[] = [];
 const EMPTY_MAPS: MapUpload[] = [];
+const EMPTY_DOCUMENTS: RecordFileDocument[] = [];
 const EMPTY_ISSUE_PAGE: Page<IssueRecord> = { items: [], total: 0, page: 1, pageSize: 500 };
 
 /** A scanned page plus the batch code it belongs to, for the stitching preview. */
@@ -69,11 +72,20 @@ export function FileDetailPage() {
     [fileId],
     EMPTY_MOVEMENTS,
   );
-  const { data: batches } = useQuery(() => service.digitization.batches(), [], EMPTY_BATCHES);
-  const { data: maps } = useQuery(
+  const { data: batches, reload: reloadBatches } = useQuery(
+    () => service.digitization.batches(),
+    [],
+    EMPTY_BATCHES,
+  );
+  const { data: maps, reload: reloadMaps } = useQuery(
     () => service.uploads.maps({ fileBarcode: file?.fileBarcode ?? '' }),
     [file?.fileBarcode],
     EMPTY_MAPS,
+  );
+  const { data: documents, reload: reloadDocuments } = useQuery(
+    () => (fileId ? service.files.listDocuments(fileId) : Promise.resolve([])),
+    [fileId],
+    EMPTY_DOCUMENTS,
   );
   const { data: openIssues } = useQuery(
     () => service.issues.list({ open: true, pageSize: 500 }),
@@ -257,7 +269,11 @@ export function FileDetailPage() {
             )}
             {allowed('files.edit') && (
               <div className="mt-4 space-y-3 border-t border-base pt-4">
-                <Field label="E-office file name / ID" htmlFor="eoffice-reference" hint="Optional. Clear the field to remove the link.">
+                <Field
+                  label="E-office file name / ID"
+                  htmlFor="eoffice-reference"
+                  hint="Optional. Clear the field to remove the link."
+                >
                   <TextInput
                     id="eoffice-reference"
                     value={eOfficeDraft ?? file.eOfficeReference ?? ''}
@@ -283,45 +299,145 @@ export function FileDetailPage() {
           </Card>
 
           <Card>
-            <div className="flex items-center gap-2">
-              <ShieldCheck className="text-accent" size={19} />
-              <p className="text-sm font-semibold">Digital document</p>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="text-accent" size={19} />
+                <p className="text-sm font-semibold">Record attachments</p>
+              </div>
+              <Badge tone={documents.length ? 'success' : 'neutral'}>
+                {documents.length} version(s)
+              </Badge>
             </div>
-            {pages.length === 0 ? (
-              <div className="mt-4 rounded-xl border border-dashed border-base p-5">
-                <p className="text-sm font-semibold">No scanned page attached yet.</p>
-                <p className="muted mt-1 text-xs leading-6">
-                  {maps.length} map/copy metadata record(s) on file. This API currently stores
-                  scan names and review metadata, not the underlying PDF or image bytes, so a reader
-                  or download link cannot be opened yet.
-                </p>
+            <p className="muted mt-2 text-xs leading-5">
+              Attach a combined scan or supporting PDF/image to this record. Uploading again creates
+              a new version; older uploads remain available.
+            </p>
+            {documents.length === 0 ? (
+              <div className="mt-4 rounded-xl border border-dashed border-base p-4">
+                <p className="mb-3 text-sm font-semibold">No file-level scan uploaded yet.</p>
+                <DocumentUploadActions
+                  filename={file.fileBarcode + '.pdf'}
+                  hasDocument={false}
+                  canUpload={allowed('files.edit')}
+                  onUpload={(upload) => service.files.uploadDocument(file.id, upload)}
+                  getBlob={() => Promise.reject(new Error('No document has been uploaded yet.'))}
+                  onUploaded={() => reloadDocuments()}
+                />
               </div>
             ) : (
-              <div className="mt-4 space-y-2">
-                {pages.map((page) => (
-                  <div
-                    key={page.id}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-base p-3"
-                  >
-                    <div>
-                      <p className="font-mono text-xs font-semibold">{page.filename}</p>
-                      <p className="muted mt-0.5 text-[11px]">
-                        {page.batchCode} · page {page.pageNo} · version {page.version}
-                      </p>
+              <div className="mt-4 space-y-3">
+                {documents.map((document, index) => (
+                  <div key={document.id} className="rounded-xl border border-base p-3">
+                    <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="break-all text-xs font-semibold">{document.filename}</p>
+                        <p className="muted mt-1 text-[11px]">
+                          Version {document.version} ·{' '}
+                          {new Date(document.uploadedAt).toLocaleString()} · {document.uploadedBy}
+                        </p>
+                      </div>
+                      {index === 0 && <Badge tone="success">Latest</Badge>}
                     </div>
-                    <StatusBadge status={page.status} />
+                    <DocumentUploadActions
+                      filename={document.filename}
+                      version={document.version}
+                      hasDocument
+                      contentType={document.contentType}
+                      sizeBytes={document.sizeBytes}
+                      pageCount={document.pageCount}
+                      canUpload={index === 0 && allowed('files.edit')}
+                      onUpload={(upload) => service.files.uploadDocument(file.id, upload)}
+                      getBlob={() => service.files.documentBlob(file.id, document.id)}
+                      onUploaded={() => reloadDocuments()}
+                    />
                   </div>
                 ))}
-                <div className="rounded-xl border border-base p-3">
-                  <p className="text-xs font-semibold">
-                    {pages.length} page metadata record(s)
+                {documents.some((item) => item.sha256) && (
+                  <p className="muted break-all text-[10px]">
+                    SHA-256 checksums are retained in upload metadata for integrity verification.
                   </p>
-                  <p className="muted mt-1 text-[11px] leading-5">
-                    The current API does not persist or serve the associated document bytes. Secure
-                    PDF/image preview and download need document storage endpoints before these rows
-                    can be opened.
-                  </p>
-                </div>
+                )}
+              </div>
+            )}
+          </Card>
+
+          <Card>
+            <p className="text-sm font-semibold">Digitization pages</p>
+            <p className="muted mt-1 text-xs leading-5">
+              Each row represents one page/version in a digitization batch. Uploading a rescan
+              creates a new version instead of overwriting the old content.
+            </p>
+            {pages.length === 0 ? (
+              <p className="muted mt-4 text-xs">No page records are linked to this barcode yet.</p>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {pages.map((page) => (
+                  <div key={page.id} className="rounded-xl border border-base p-3">
+                    <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="break-all text-xs font-semibold">{page.filename}</p>
+                        <p className="muted mt-1 text-[11px]">
+                          {page.batchCode} · page {page.pageNo} · version {page.version}
+                        </p>
+                      </div>
+                      <StatusBadge status={page.status} />
+                    </div>
+                    <DocumentUploadActions
+                      filename={page.filename}
+                      version={page.version}
+                      hasDocument={page.hasDocument === true}
+                      contentType={page.contentType}
+                      sizeBytes={page.sizeBytes}
+                      canUpload={allowed('digitization.upload')}
+                      onUpload={(upload) =>
+                        service.digitization.uploadPageDocument(page.id, upload)
+                      }
+                      getBlob={() => service.digitization.pageBlob(page.id)}
+                      onUploaded={() => reloadBatches()}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          <Card>
+            <div className="flex items-center gap-2">
+              <MapPin className="text-accent" size={19} />
+              <p className="text-sm font-semibold">Maps and copies</p>
+            </div>
+            <p className="muted mt-1 text-xs leading-5">
+              Actual map scans are stored as versioned files. Existing metadata-only map rows can be
+              uploaded here as well.
+            </p>
+            {maps.length === 0 ? (
+              <p className="muted mt-4 text-xs">No map/copy rows are registered for this file.</p>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {maps.map((map) => (
+                  <div key={map.id} className="rounded-xl border border-base p-3">
+                    <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="break-all text-xs font-semibold">{map.filename}</p>
+                        <p className="muted mt-1 text-[11px]">
+                          Page {map.pageNo} · v{map.version} · {map.sizeKb} KiB
+                        </p>
+                      </div>
+                      <StatusBadge status={map.status} />
+                    </div>
+                    <DocumentUploadActions
+                      filename={map.filename}
+                      version={map.version}
+                      hasDocument={map.hasDocument === true}
+                      contentType={map.contentType}
+                      sizeBytes={map.sizeBytes}
+                      canUpload={allowed('files.edit') || allowed('digitization.upload')}
+                      onUpload={(upload) => service.uploads.uploadMapDocument(map.id, upload)}
+                      getBlob={() => service.uploads.mapBlob(map.id)}
+                      onUploaded={() => reloadMaps()}
+                    />
+                  </div>
+                ))}
               </div>
             )}
           </Card>

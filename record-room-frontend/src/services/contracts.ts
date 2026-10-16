@@ -36,6 +36,7 @@ import type {
   MovementEvent,
   MovementKind,
   RecordFile,
+  RecordFileDocument,
   ReportDefinition,
   ReportKey,
   Role,
@@ -209,6 +210,9 @@ export interface FilesApi {
     reason: string,
   ): Promise<Result<RecordFile>>;
   updateEOfficeReference(fileId: string, reference: string): Promise<Result<RecordFile>>;
+  listDocuments(fileId: string): Promise<RecordFileDocument[]>;
+  uploadDocument(fileId: string, file: File): Promise<Result<RecordFileDocument>>;
+  documentBlob(fileId: string, documentId: string): Promise<Blob>;
   remove(fileId: string): Promise<Result<true>>;
 }
 
@@ -317,6 +321,8 @@ export interface DigitizationApi {
     batchId: string,
     input: { fileBarcode: string; pageNo: number; filename: string; bulk: boolean },
   ): Promise<Result<DigitizationPage>>;
+  uploadPageDocument(pageId: string, file: File): Promise<Result<DigitizationPage>>;
+  pageBlob(pageId: string): Promise<Blob>;
   removePage(pageId: string): Promise<Result<true>>;
   reviewPage(
     pageId: string,
@@ -342,6 +348,8 @@ export interface UploadsApi {
     sizeKb: number;
   }): Promise<Result<MapUpload>>;
   removeMap(id: string): Promise<Result<true>>;
+  uploadMapDocument(id: string, file: File): Promise<Result<MapUpload>>;
+  mapBlob(id: string): Promise<Blob>;
 }
 
 // ----------------------------------------------------------------- bulk api

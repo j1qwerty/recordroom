@@ -10,6 +10,7 @@ import { Flash, StatusBadge } from '../components/ui/Flash';
 import { EmptyState } from '../components/ui/EmptyState';
 import { useQuery, useService, useSession } from '../hooks/useService';
 import { FOLDER_LABELS, type DigitizationBatch } from '../types';
+import { DocumentUploadActions } from '../components/DocumentUploadActions';
 
 /**
  * Batch detail with page-level review.
@@ -187,7 +188,7 @@ export function DigitizationBatchPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[820px] text-left text-sm">
+              <table className="w-full min-w-[1120px] text-left text-sm">
                 <thead className="bg-[var(--rr-bg)] text-xs uppercase tracking-wider muted">
                   <tr>
                     <th className="px-5 py-3">Scanned file</th>
@@ -195,7 +196,7 @@ export function DigitizationBatchPage() {
                     <th className="px-5 py-3">Version</th>
                     <th className="px-5 py-3">Status</th>
                     <th className="px-5 py-3">Note</th>
-                    <th className="px-5 py-3" />
+                    <th className="px-5 py-3">Review and document</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--rr-border)]">
@@ -249,6 +250,23 @@ export function DigitizationBatchPage() {
                               </Button>
                             </div>
                           )}
+                        <div className="mt-2 min-w-[260px]">
+                          <DocumentUploadActions
+                            filename={page.filename}
+                            version={page.version}
+                            hasDocument={page.hasDocument === true}
+                            contentType={page.contentType}
+                            sizeBytes={page.sizeBytes}
+                            pageCount={page.pageCount}
+                            pageIndex={page.pageIndex}
+                            canUpload={allowed('digitization.upload') && !readOnly}
+                            onUpload={(file) =>
+                              service.digitization.uploadPageDocument(page.id, file)
+                            }
+                            getBlob={() => service.digitization.pageBlob(page.id)}
+                            onUploaded={() => reload()}
+                          />
+                        </div>
                       </td>
                     </tr>
                   ))}

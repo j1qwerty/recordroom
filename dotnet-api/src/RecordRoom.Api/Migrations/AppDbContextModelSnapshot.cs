@@ -346,6 +346,10 @@ namespace RecordRoom.Api.Migrations
                     b.Property<bool>("Bulk")
                         .HasColumnType("bit");
 
+                    b.Property<string>("ContentType")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("FileName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -354,11 +358,28 @@ namespace RecordRoom.Api.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("PageCount")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PageIndex")
+                        .HasColumnType("int");
+
                     b.Property<int>("PageNo")
                         .HasColumnType("int");
 
+                    b.Property<string>("Sha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<long?>("SizeBytes")
+                        .HasColumnType("bigint");
+
                     b.Property<int>("Status")
                         .HasColumnType("int");
+
+                    b.Property<string>("StorageKey")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
 
                     b.Property<DateTime>("UploadedAt")
                         .HasColumnType("datetime2");
@@ -693,18 +714,39 @@ namespace RecordRoom.Api.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(64)");
 
+                    b.Property<string>("ContentType")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<string>("FileName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int?>("PageCount")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("PageIndex")
+                        .HasColumnType("int");
+
                     b.Property<int>("PageNo")
                         .HasColumnType("int");
+
+                    b.Property<string>("Sha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<long?>("SizeBytes")
+                        .HasColumnType("bigint");
 
                     b.Property<int>("SizeKb")
                         .HasColumnType("int");
 
                     b.Property<int>("Status")
                         .HasColumnType("int");
+
+                    b.Property<string>("StorageKey")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
 
                     b.Property<DateTime>("UploadedAt")
                         .HasColumnType("datetime2");
@@ -865,11 +907,6 @@ namespace RecordRoom.Api.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("RecordKind")
-                        .IsRequired()
-                        .HasMaxLength(8)
-                        .HasColumnType("nvarchar(8)");
-
                     b.Property<int>("FileKind")
                         .HasColumnType("int");
 
@@ -903,6 +940,11 @@ namespace RecordRoom.Api.Migrations
                     b.Property<string>("PropertyNo")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("RecordKind")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("nvarchar(8)");
 
                     b.Property<int?>("RoomId")
                         .HasColumnType("int");
@@ -945,6 +987,62 @@ namespace RecordRoom.Api.Migrations
                     b.HasIndex("Department", "Status");
 
                     b.ToTable("Files", (string)null);
+                });
+
+            modelBuilder.Entity("RecordRoom.Api.Domain.RecordFileDocument", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<int?>("PageCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RecordFileId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<DateTime>("UploadedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("UploadedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("nvarchar(256)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecordFileId", "Version")
+                        .IsUnique();
+
+                    b.ToTable("RecordFileDocuments", (string)null);
                 });
 
             modelBuilder.Entity("RecordRoom.Api.Domain.Room", b =>
@@ -1243,6 +1341,17 @@ namespace RecordRoom.Api.Migrations
                     b.Navigation("Shelf");
                 });
 
+            modelBuilder.Entity("RecordRoom.Api.Domain.RecordFileDocument", b =>
+                {
+                    b.HasOne("RecordRoom.Api.Domain.RecordFile", "RecordFile")
+                        .WithMany("Documents")
+                        .HasForeignKey("RecordFileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RecordFile");
+                });
+
             modelBuilder.Entity("RecordRoom.Api.Domain.Section", b =>
                 {
                     b.HasOne("RecordRoom.Api.Domain.Room", "Room")
@@ -1308,6 +1417,8 @@ namespace RecordRoom.Api.Migrations
 
             modelBuilder.Entity("RecordRoom.Api.Domain.RecordFile", b =>
                 {
+                    b.Navigation("Documents");
+
                     b.Navigation("IssueLines");
 
                     b.Navigation("Maps");
