@@ -34,18 +34,39 @@ for `http` mode.
 
 The API's default connection string is `Server=localhost;…;Trusted_Connection=True`,
 which does **not** resolve LocalDB — it needs a real instance listening on the
-machine. SQL Server installs as a service called `MSSQLSERVER` and does **not**
-start on boot, so on a fresh machine:
+machine. SQL Server installs as a service called `MSSQLSERVER`, and on this
+machine it ships **`Disabled`**, so `net start` fails with:
 
-```powershell
-# from an Administrator PowerShell — a normal shell gets "Access is denied"
-Start-Service MSSQLSERVER      # or: net start MSSQLSERVER
+```
+System error 1058 has occurred.
+The service cannot be started, either because it is disabled or because it has
+no enabled devices associated with it.
 ```
 
-Check it without starting anything: `Get-Service MSSQLSERVER`. If it reports
-`Stopped`, the API will boot but `/api/health` will report the database as
-unreachable — it does not crash on an unreachable database, so a green console
-does not mean the database is up.
+1058 means disabled, not broken — un-disable it first. From an **Administrator**
+PowerShell (a normal shell fails earlier with `Access is denied`):
+
+```powershell
+Set-Service MSSQLSERVER -StartupType Manual
+Start-Service MSSQLSERVER
+Get-Service MSSQLSERVER          # expect Running / Manual
+```
+
+`Manual` rather than `Automatic` deliberately: SQL Server holds a couple of GB,
+and a dev box should not claim it on every boot. Use `-StartupType Automatic` if
+you would rather it always come up.
+
+Equivalent with `sc.exe`, which needs the space after `start=` — a missing space
+is a silent no-op here:
+
+```powershell
+sc.exe config MSSQLSERVER start= demand
+net start MSSQLSERVER
+```
+
+If the API is already running, `/api/health` reports the database as unreachable
+rather than crashing, so a clean boot does not prove the database is up — check
+health, not the console.
 
 First boot of the API creates the `RecordRoom` database, applies the EF migrations
 and seeds the demo dataset, so there is no manual SQL step.
