@@ -25,13 +25,15 @@ export function MapsPage() {
   const service = useService();
   const session = useSession();
   const location = useLocation();
-  const presetBarcode = new URLSearchParams(location.search).get('fileBarcode') ?? '';
+  const params = new URLSearchParams(location.search);
+  const presetBarcode = params.get('fileBarcode') ?? '';
+  const openUploadOnLoad = params.get('add') === '1';
   // MapsPage rows are digitization scans, so reuse that permission. It matches the
   // API's Admin/Supervisor/Operator gate on `POST /api/uploads/maps/{id}/document`.
   const canUpload = session.allowed('digitization.upload');
 
   const [search, setSearch] = useState(presetBarcode);
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding] = useState(openUploadOnLoad);
   const [flash, setFlash] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
   // The API owns the filter, so re-running on every keystroke matches what the
