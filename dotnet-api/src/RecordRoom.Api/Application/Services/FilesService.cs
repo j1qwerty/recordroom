@@ -274,7 +274,7 @@ public sealed class FilesService(
             Year = input.Year,
             FileKind = ParseKind(input.FileType),
             RecordKind = input.RecordKind is null
-                ? (string.Equals(input.DocumentSize, "A0", StringComparison.OrdinalIgnoreCase) ? "Map" : "File")
+                ? (string.Equals(input.FileType, "Map", StringComparison.OrdinalIgnoreCase) ? "Map" : "File")
                 : (string.Equals(input.RecordKind, "Map", StringComparison.OrdinalIgnoreCase) ? "Map" : "File"),
             DocumentSize = input.DocumentSize is "A0" or "A1" or "A2" or "A3" or "A4" ? input.DocumentSize : "Other",
             EOfficeReference = string.IsNullOrWhiteSpace(input.EOfficeReference) ? null : input.EOfficeReference.Trim(),
