@@ -15,6 +15,7 @@ public interface IFilesService
     Task<IReadOnlyList<FieldError>> ValidateCreateAsync(FileCreateInput input, CancellationToken ct = default);
     Task<Result<FileDto>> CreateAsync(FileCreateInput input, CancellationToken ct = default);
     Task<Result<FileDto>> RelocateAsync(int id, RelocateInput input, CancellationToken ct = default);
+    Task<Result<FileDto>> UpdateEOfficeReferenceAsync(int id, EOfficeReferenceInput input, CancellationToken ct = default);
     Task<Result<bool>> DeleteAsync(int id, CancellationToken ct = default);
     Task<int> CountAsync(CancellationToken ct = default);
 }
