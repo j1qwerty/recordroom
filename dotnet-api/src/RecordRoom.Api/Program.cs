@@ -296,7 +296,12 @@ app.MapGet("/api/health", async (AppDbContext db, ICacheService cache) =>
     return Results.Ok(new HealthDto(
         dbOk ? "Healthy" : "Degraded",
         dbError,
-        cache.IsDistributed,
+        // Only claim the distributed cache when it is genuinely reachable. With
+        // abortConnect=false the multiplexer is constructed even if Redis is
+        // down, so IsDistributed alone would report a healthy cache that caches
+        // nothing. A cache failure is not a reason to fail the whole app, so it
+        // is surfaced here rather than folded into the overall status.
+        cache.IsDistributed && cache.IsReachable,
         string.Equals(hangfireStorage, "SqlServer", StringComparison.OrdinalIgnoreCase)
             ? "SqlServer"
             : "InMemory",

@@ -16,6 +16,15 @@ namespace RecordRoom.Api.Infrastructure.Cache;
 public interface ICacheService
 {
     bool IsDistributed { get; }
+
+    /// <summary>
+    /// Whether the backing store is actually usable right now. Distinct from
+    /// <see cref="IsDistributed"/>: with abortConnect=false the multiplexer is
+    /// built even when Redis is down, so IsDistributed can be true while nothing
+    /// is actually being cached.
+    /// </summary>
+    bool IsReachable { get; }
+
     T? Get<T>(string key);
     Task SetAsync<T>(string key, T value, TimeSpan ttl);
     Task RemoveAsync(string key);
@@ -25,6 +34,8 @@ public interface ICacheService
 public sealed class MemoryCacheService(IMemoryCache cache) : ICacheService
 {
     public bool IsDistributed => false;
+
+    public bool IsReachable => true;
 
     public T? Get<T>(string key) => cache.Get<T>(key);
 
@@ -57,6 +68,13 @@ public sealed class RedisCacheService(
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     public bool IsDistributed => true;
+
+    /// <summary>
+    /// Reports the live multiplexer state rather than assuming it. A Redis that
+    /// stopped after boot leaves IsDistributed true, so this is the only honest
+    /// signal for /api/health.
+    /// </summary>
+    public bool IsReachable => redis.IsConnected;
 
     private static string Slot(string key) => $"rr:{key}";
 

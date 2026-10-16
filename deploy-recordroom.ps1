@@ -348,6 +348,12 @@ upsert_env FileStorage__RootPath "$docroot"
 # multipart envelope and keeps oversized files rejected by the API's own
 # validation message instead of an opaque proxy 413.
 upsert_env FileStorage__MaxUploadBytes "50331648"
+# Redis is optional by design: the API falls back to the in-memory cache when the
+# connection string is blank or the server is unreachable. abortConnect=false is
+# the StackExchange.Redis default and is stated explicitly because it decides
+# whether a Redis that is down at boot is retried in the background (good) or
+# demotes the process to the in-memory cache until the next restart (bad).
+upsert_env Redis__ConnectionString "127.0.0.1:6379,abortConnect=false"
 chmod 640 "$envfile"
 chown root:www-data "$envfile"
 
@@ -615,6 +621,25 @@ echo "DOCROOT_OK `$root"
                 Write-Ok "document storage writable and outside the app dir ($($docProbe.Trim()))"
             } else {
                 Fail "document storage probe failed: $($docProbe.Trim())"
+            }
+        }
+
+        if ($deployApi -or $Target -eq 'both') {
+            # The API degrades to the in-memory cache when Redis is unreachable, so
+            # a silent fallback would look like a successful deploy. Ask Redis
+            # directly and report which cache is actually in use.
+            $redisLine = (Invoke-Checked ssh @('-o', 'BatchMode=yes', $Host_,
+                "redis-cli -h 127.0.0.1 ping 2>/dev/null || echo NOREDIS") -What 'redis ping').Trim()
+            $apiCache = (Invoke-Checked ssh @('-o', 'BatchMode=yes', $Host_,
+                "curl -fsS 'http://127.0.0.1:$ApiPort/api/health'") -What 'cache health')
+            if ($redisLine -match 'PONG') {
+                if ($apiCache -match '"redis"\s*:\s*true') {
+                    Write-Ok "Redis reachable and in use by the API"
+                } else {
+                    Fail "Redis answered PONG but /api/health reports redis:false -- the connection string is not taking effect"
+                }
+            } else {
+                Write-Warn 'Redis is not answering; the API will use the in-memory cache'
             }
         }
 
