@@ -52,6 +52,7 @@ import {
 } from './map';
 import type {
   Area,
+  Room,
   BarcodeSubject,
   DigitizationBatch,
   FileCreateInput,
