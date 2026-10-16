@@ -27,6 +27,8 @@ function matchSearch(file: RecordFile, needle: string): boolean {
     file.holder ?? '',
     file.area,
     file.dealer,
+    file.recordKind ?? (file.fileType === 'Map' ? 'Map' : 'File'),
+    file.documentSize ?? '',
   ]
     .join(' ')
     .toLowerCase();
@@ -61,6 +63,9 @@ export const filesService: FilesApi = {
         return false;
       }
       if (query.status && query.status !== 'All' && file.status !== query.status) return false;
+      const recordKind = file.recordKind ?? (file.fileType === 'Map' ? 'Map' : 'File');
+      if (query.recordKind && query.recordKind !== 'All' && recordKind !== query.recordKind) return false;
+      if (query.fileType && query.fileType !== 'All' && file.fileType !== query.fileType) return false;
       if (query.roomId && file.roomId !== query.roomId) return false;
       if (query.sectionId && file.sectionId !== query.sectionId) return false;
       if (query.shelfId && file.shelfId !== query.shelfId) return false;
@@ -218,6 +223,8 @@ export const filesService: FilesApi = {
       department: input.department.trim(),
       year: input.year,
       fileType: input.fileType,
+      recordKind: input.recordKind ?? (input.documentSize === 'A0' ? 'Map' : input.fileType === 'Map' ? 'Map' : 'File'),
+      documentSize: input.documentSize ?? 'Other',
       status: 'Available',
       location: locationPath(room, section, unit, shelf),
       roomId: room?.id ?? '',
