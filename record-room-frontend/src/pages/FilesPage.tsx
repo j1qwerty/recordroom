@@ -107,7 +107,7 @@ export function FilesPage() {
       file.department,
       file.year,
       file.status,
-      file.recordKind ?? (file.fileType === 'Map' ? 'Map' : 'File'),
+      file.recordKind ?? (file.documentSize === 'A0' || file.fileType === 'Map' ? 'Map' : 'File'),
       file.documentSize ?? 'Other',
       file.fileType,
       file.eOfficeReference ?? '',
