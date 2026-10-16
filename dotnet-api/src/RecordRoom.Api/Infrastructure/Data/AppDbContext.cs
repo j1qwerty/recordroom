@@ -129,6 +129,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.Subject).HasMaxLength(400);
             e.Property(x => x.RecordKind).HasMaxLength(8);
             e.Property(x => x.DocumentSize).HasMaxLength(16);
+            e.Property(x => x.EOfficeReference).HasMaxLength(200);
             e.Property(x => x.LocationDisplay).HasMaxLength(300);
             e.HasOne(x => x.Shelf).WithMany(x => x.Files).HasForeignKey(x => x.ShelfId)
                 .OnDelete(DeleteBehavior.Restrict);
