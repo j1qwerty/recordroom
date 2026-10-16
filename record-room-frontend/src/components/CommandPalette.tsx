@@ -36,6 +36,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const { allowed } = useSession();
   const [query, setQuery] = useState('');
   const [records, setRecords] = useState<RecordFile[]>([]);
+  const [recordsQuery, setRecordsQuery] = useState('');
   const [searching, setSearching] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -77,19 +78,23 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   }, []);
 
   useEffect(() => {
-    if (!open || query.trim().length < 2 || !allowed('files.view')) {
-      setRecords([]);
-      setSearching(false);
-      return;
-    }
+    const term = query.trim();
+    if (!open || term.length < 2 || !allowed('files.view')) return;
+
     let cancelled = false;
     const timer = window.setTimeout(async () => {
       setSearching(true);
       try {
-        const result = await service.files.list({ search: query.trim(), page: 1, pageSize: 6 });
-        if (!cancelled) setRecords(result.items);
+        const result = await service.files.list({ search: term, page: 1, pageSize: 6 });
+        if (!cancelled) {
+          setRecords(result.items);
+          setRecordsQuery(term);
+        }
       } catch {
-        if (!cancelled) setRecords([]);
+        if (!cancelled) {
+          setRecords([]);
+          setRecordsQuery(term);
+        }
       } finally {
         if (!cancelled) setSearching(false);
       }
@@ -100,16 +105,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     };
   }, [open, query, service, allowed]);
 
-  useEffect(() => {
-    if (open) {
-      setQuery('');
-      setActiveIndex(0);
-    } else {
-      setRecords([]);
-    }
-  }, [open]);
-
-  const recordItems: PaletteItem[] = query.trim().length >= 2
+  const recordItems: PaletteItem[] = query.trim().length >= 2 && recordsQuery === query.trim()
     ? records.map((file) => ({
         id: `record-${file.id}`,
         label: file.fileNumber || file.fileBarcode,
@@ -207,8 +203,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               </div>
             );
           })}
-          {searching && <p className="muted px-3 py-4 text-sm">Searching the registry…</p>}
-          {!searching && allItems.length === 0 && (
+          {open && query.trim().length >= 2 && searching && <p className="muted px-3 py-4 text-sm">Searching the registry…</p>}
+          {!(open && query.trim().length >= 2 && searching) && allItems.length === 0 && (
             <p className="muted px-3 py-8 text-center text-sm">
               No matches. Try a different page name, file number or barcode.
             </p>
