@@ -209,7 +209,7 @@ public sealed class FilesService(
 
         if (string.IsNullOrWhiteSpace(input.Subject))
             errors.Add(new FieldError("Subject is required.", "subject"));
-        if (input.EOfficeReference?.Trim().Length > 200)
+        if (!string.IsNullOrWhiteSpace(input.EOfficeReference) && input.EOfficeReference.Trim().Length > 200)
             errors.Add(new FieldError("E-office reference must be 200 characters or fewer.", "eOfficeReference"));
         if (string.IsNullOrWhiteSpace(input.Department))
             errors.Add(new FieldError("Department is required.", "department"));
