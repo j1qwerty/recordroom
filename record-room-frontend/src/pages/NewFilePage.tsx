@@ -10,10 +10,11 @@ import { BarcodeSymbol } from '../components/BarcodeSymbol';
 import { useQuery, useService } from '../hooks/useService';
 import { buildPayload } from '../lib/barcode';
 import { nextFileBarcode } from '../services/impl/files';
-import type { Area, FileCreateInput, FileType, RecordFile, StorageStatus } from '../types';
+import type { Area, DocumentSize, FileCreateInput, FileType, RecordFile, RecordKind, StorageStatus } from '../types';
 import type { Page, RecordRoomService } from '../services/contracts';
 
 const FILE_TYPES: FileType[] = ['Letter', 'File', 'Register', 'Map', 'Drawing', 'Report'];
+const DOCUMENT_SIZES: DocumentSize[] = ['A0', 'A1', 'A2', 'A3', 'A4', 'Other'];
 const COAL_LIVES = [
   '10 years',
   '15 years',
@@ -31,6 +32,8 @@ const emptyForm: FileCreateInput = {
   department: '',
   year: new Date().getFullYear(),
   fileType: 'File',
+  recordKind: 'File',
+  documentSize: 'A4',
   shelfId: '',
   position: 1,
   pincode: '',
@@ -46,6 +49,12 @@ const emptyForm: FileCreateInput = {
 interface ShelfPath {
   id: string;
   status: StorageStatus;
+  roomId: string;
+  roomLabel: string;
+  sectionId: string;
+  sectionLabel: string;
+  almirahId: string;
+  almirahLabel: string;
   barcode: string;
   code: string;
   capacity: number;
@@ -87,6 +96,12 @@ async function loadShelfPaths(service: RecordRoomService): Promise<ShelfPath[]> 
           paths.push({
             id: shelf.id,
             status: shelf.status,
+            roomId: room.id,
+            roomLabel: `${room.code} — ${room.name}`,
+            sectionId: section.id,
+            sectionLabel: `${section.code} — ${section.name}`,
+            almirahId: unit.id,
+            almirahLabel: `${unit.code} — ${unit.name}`, 
             barcode: shelf.barcode,
             code: shelf.code,
             capacity: shelf.capacity,
@@ -124,6 +139,10 @@ export function NewFilePage() {
   );
 
   const [draft, setDraft] = useState<FileCreateInput>(emptyForm);
+  const [selectedRoomId, setSelectedRoomId] = useState('');
+  const [selectedSectionId, setSelectedSectionId] = useState('');
+  const [selectedAlmirahId, setSelectedAlmirahId] = useState('');
+  const [recordKindManuallySet, setRecordKindManuallySet] = useState(false);
   /** Set once the operator types a barcode of their own; null means "follow the registry". */
   const [barcodeOverride, setBarcodeOverride] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -143,9 +162,29 @@ export function NewFilePage() {
   const { data: shelfPaths } = useQuery(() => loadShelfPaths(service), [], [] as ShelfPath[]);
   const { data: areas } = useQuery(() => service.locations.areas(), [], [] as Area[]);
 
-  const shelfOptions = useMemo(
-    () => shelfPaths.filter((path) => path.status === 'Active'),
+  const roomOptions = useMemo(
+    () => [...new Map(shelfPaths.map((path) => [path.roomId, { id: path.roomId, label: path.roomLabel }])).values()],
     [shelfPaths],
+  );
+  const sectionOptions = useMemo(
+    () => [...new Map(shelfPaths.filter((path) => !selectedRoomId || path.roomId === selectedRoomId)
+      .map((path) => [path.sectionId, { id: path.sectionId, label: path.sectionLabel }])).values()],
+    [shelfPaths, selectedRoomId],
+  );
+  const almirahOptions = useMemo(
+    () => [...new Map(shelfPaths.filter((path) =>
+      (!selectedRoomId || path.roomId === selectedRoomId) &&
+      (!selectedSectionId || path.sectionId === selectedSectionId))
+      .map((path) => [path.almirahId, { id: path.almirahId, label: path.almirahLabel }])).values()],
+    [shelfPaths, selectedRoomId, selectedSectionId],
+  );
+  const shelfOptions = useMemo(
+    () => shelfPaths.filter((path) =>
+      path.status === 'Active' &&
+      (!selectedRoomId || path.roomId === selectedRoomId) &&
+      (!selectedSectionId || path.sectionId === selectedSectionId) &&
+      (!selectedAlmirahId || path.almirahId === selectedAlmirahId)),
+    [shelfPaths, selectedRoomId, selectedSectionId, selectedAlmirahId],
   );
   const blockedShelves = useMemo(
     () => shelfPaths.filter((path) => path.status !== 'Active'),
@@ -209,6 +248,10 @@ export function NewFilePage() {
 
   const resetForm = () => {
     setDraft(emptyForm);
+    setSelectedRoomId('');
+    setSelectedSectionId('');
+    setSelectedAlmirahId('');
+    setRecordKindManuallySet(false);
     setBarcodeOverride(null);
     setCreatedId(null);
     reloadFiles();
@@ -315,6 +358,35 @@ export function NewFilePage() {
                         ))}
                       </SelectInput>
                     </Field>
+                    <Field label="Record kind" htmlFor="file-record-kind" required hint="A0 defaults to Map; choose File or Map explicitly when needed.">
+                      <SelectInput
+                        id="file-record-kind"
+                        value={form.recordKind ?? 'File'}
+                        onChange={(event) => {
+                          setRecordKindManuallySet(true);
+                          set('recordKind', event.target.value as RecordKind);
+                        }}
+                      >
+                        <option value="File">File</option>
+                        <option value="Map">Map</option>
+                      </SelectInput>
+                    </Field>
+                    <Field label="Document size" htmlFor="file-document-size">
+                      <SelectInput
+                        id="file-document-size"
+                        value={form.documentSize ?? 'Other'}
+                        onChange={(event) => {
+                          const size = event.target.value as DocumentSize;
+                          setDraft((current) => ({
+                            ...current,
+                            documentSize: size,
+                            ...(!recordKindManuallySet ? { recordKind: size === 'A0' ? 'Map' : 'File' } : {}),
+                          }));
+                        }}
+                      >
+                        {DOCUMENT_SIZES.map((size) => <option key={size} value={size}>{size === 'Other' ? 'Other / not known' : size}</option>)}
+                      </SelectInput>
+                    </Field>
                     <Field label="Codal life" htmlFor="file-codal">
                       <SelectInput
                         id="file-codal"
@@ -336,6 +408,50 @@ export function NewFilePage() {
                 <p className="text-sm font-semibold">Placement</p>
                 <div className="mt-4">
                   <FormGrid>
+                    <Field label="Room" htmlFor="file-room" required>
+                      <SelectInput
+                        id="file-room"
+                        value={selectedRoomId}
+                        onChange={(event) => {
+                          setSelectedRoomId(event.target.value);
+                          setSelectedSectionId('');
+                          setSelectedAlmirahId('');
+                          set('shelfId', '');
+                        }}
+                      >
+                        <option value="">Select a room</option>
+                        {roomOptions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                      </SelectInput>
+                    </Field>
+                    <Field label="Section" htmlFor="file-section" required>
+                      <SelectInput
+                        id="file-section"
+                        value={selectedSectionId}
+                        onChange={(event) => {
+                          setSelectedSectionId(event.target.value);
+                          setSelectedAlmirahId('');
+                          set('shelfId', '');
+                        }}
+                        disabled={!selectedRoomId}
+                      >
+                        <option value="">Select a section</option>
+                        {sectionOptions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                      </SelectInput>
+                    </Field>
+                    <Field label="Almirah / rack" htmlFor="file-almirah" required>
+                      <SelectInput
+                        id="file-almirah"
+                        value={selectedAlmirahId}
+                        onChange={(event) => {
+                          setSelectedAlmirahId(event.target.value);
+                          set('shelfId', '');
+                        }}
+                        disabled={!selectedSectionId}
+                      >
+                        <option value="">Select an almirah or rack</option>
+                        {almirahOptions.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+                      </SelectInput>
+                    </Field>
                     <Field
                       label="Shelf"
                       htmlFor="file-shelf"
