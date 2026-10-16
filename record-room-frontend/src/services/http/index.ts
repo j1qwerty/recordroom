@@ -27,7 +27,7 @@ import type {
   AuditApi,
 } from '../contracts';
 import { err, ok } from '../contracts';
-import { attempt, get, getToken, post, qs, send, setToken, toApiId, toFieldIssues } from './client';
+import { attempt, attemptForm, get, getBlob, getToken, post, qs, send, setToken, toApiId, toFieldIssues } from './client';
 import {
   toAppUser,
   toArea,
@@ -44,6 +44,7 @@ import {
   toPage,
   toPayload,
   toReportDefinition,
+  toRecordFileDocument,
   toRoom,
   toScanResult,
   toStats,
@@ -413,6 +414,21 @@ export const httpFilesService: FilesApi = {
     return result.ok ? ok(toFile(result.value)) : result;
   },
 
+  async listDocuments(fileId) {
+    return list(await get<Dto[]>(`/api/files/${fileId}/documents`), toRecordFileDocument);
+  },
+
+  async uploadDocument(fileId, file) {
+    const body = new FormData();
+    body.append('document', file, file.name);
+    const result = await attemptForm<Dto>(`/api/files/${fileId}/documents`, body);
+    return result.ok ? ok(toRecordFileDocument(result.value)) : result;
+  },
+
+  async documentBlob(fileId, documentId) {
+    return getBlob(`/api/files/${fileId}/documents/${documentId}/content`);
+  },
+
   async remove(fileId) {
     return wrapTrue(await attempt<Dto>('DELETE', `/api/files/${fileId}`));
   },
@@ -653,6 +669,17 @@ export const httpDigitizationService: DigitizationApi = {
     return result.ok ? ok(toPage(result.value)) : result;
   },
 
+  async uploadPageDocument(pageId, file) {
+    const body = new FormData();
+    body.append('document', file, file.name);
+    const result = await attemptForm<Dto>(`/api/digitization/pages/${pageId}/document`, body);
+    return result.ok ? ok(toPage(result.value)) : result;
+  },
+
+  async pageBlob(pageId) {
+    return getBlob(`/api/digitization/pages/${pageId}/content`);
+  },
+
   async removePage(pageId) {
     return wrapTrue(await attempt<Dto>('DELETE', `/api/digitization/pages/${pageId}`));
   },
@@ -698,6 +725,17 @@ export const httpUploadsService: UploadsApi = {
       sizeKb: input.sizeKb,
     });
     return result.ok ? ok(toMapUpload(result.value)) : result;
+  },
+
+  async uploadMapDocument(id, file) {
+    const body = new FormData();
+    body.append('document', file, file.name);
+    const result = await attemptForm<Dto>(`/api/uploads/maps/${id}/document`, body);
+    return result.ok ? ok(toMapUpload(result.value)) : result;
+  },
+
+  async mapBlob(id) {
+    return getBlob(`/api/uploads/maps/${id}/content`);
   },
 
   async removeMap(id) {
