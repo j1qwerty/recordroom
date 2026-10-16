@@ -88,9 +88,16 @@ var redisConnection = builder.Configuration["Redis:ConnectionString"];
 // One multiplexer, shared by the cache, the SignalR backplane and the rate
 // limiter. Connecting once avoids three pools and three connection attempts.
 // A null result is legitimate and means "no Redis": every consumer degrades.
-builder.Services.AddSingleton<IConnectionMultiplexer?>(sp =>
+//
+// The service type is deliberately NOT annotated `IConnectionMultiplexer?`.
+// The DI container has no notion of a nullable service type, so the annotation
+// is meaningless to it and only misleads readers into calling
+// GetRequiredService, which throws on a null factory result instead of
+// returning null - which is exactly how this took every request down with a
+// 500 before. Consumers must use GetService<IConnectionMultiplexer>().
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
 {
-    if (string.IsNullOrWhiteSpace(redisConnection)) return null;
+    if (string.IsNullOrWhiteSpace(redisConnection)) return null!;
     var log = sp.GetRequiredService<ILogger<Program>>();
     try
     {
@@ -106,7 +113,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer?>(sp =>
         // Only an unusable connection string lands here. Redis is optional, so this
         // must not prevent startup.
         log.LogWarning(ex, "Redis unavailable at {Redis}; running without it.", redisConnection);
-        return null;
+        return null!;
     }
 });
 
@@ -114,7 +121,11 @@ builder.Services.AddSingleton<ICacheService>(sp =>
 {
     var memory = sp.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
     var log = sp.GetRequiredService<ILogger<Program>>();
-    var mux = sp.GetRequiredService<IConnectionMultiplexer?>();
+    // GetService, not GetRequiredService: the multiplexer factory above returns
+    // null when Redis is not configured, and the container reports a null factory
+    // result as *unregistered*. GetRequiredService would therefore throw and take
+    // every request down, instead of degrading to the in-memory cache as intended.
+    var mux = sp.GetService<IConnectionMultiplexer>();
 
     if (mux is null)
     {

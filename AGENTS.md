@@ -50,6 +50,7 @@ pnpm build
 - `pnpm test` = `vitest run` (node env); single test: `pnpm vitest run tests/utils.test.ts`. `pnpm clean` removes build output.
 - ESLint: `@typescript-eslint/no-explicit-any` is `error` — do not introduce `any`.
 - `tests/api-contract.test.ts` runs the frontend adapter against a live API and **skips itself when the API is not reachable**. Start the API first to get its 19 assertions.
+- With the API up, `pnpm test` performs roughly 6 logins inside a 60s window, and the API allows 10 logins per 60s per IP (`RateLimiting:Login`). Back-to-back runs — e.g. `scripts/test-api.ps1` then `pnpm test`, or two `pnpm test` invocations — exhaust the budget and fail with `signIn.ok === false`. Wait ~75s between runs, or raise `RateLimiting:Login:PermitLimit` locally. The API log line is `Rate limit login exceeded for ::1; blocked for Ns`.
 
 ### API
 

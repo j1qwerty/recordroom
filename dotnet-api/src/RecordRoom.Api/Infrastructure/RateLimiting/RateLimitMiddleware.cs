@@ -151,7 +151,11 @@ public static class RateLimitingRegistration
 
         services.AddSingleton<IRateLimiter>(sp =>
         {
-            var mux = sp.GetRequiredService<IConnectionMultiplexer?>();
+            // GetService, not GetRequiredService: the multiplexer factory returns null
+            // when Redis is not configured, and the container treats a null factory
+            // result as unregistered - so GetRequiredService throws here and every
+            // request 500s instead of falling back to the in-memory limiter.
+            var mux = sp.GetService<IConnectionMultiplexer>();
             return mux is null
                 ? new MemoryRateLimiter(sp.GetRequiredService<ILogger<MemoryRateLimiter>>())
                 : new RedisRateLimiter(mux, sp.GetRequiredService<ILogger<RedisRateLimiter>>());
