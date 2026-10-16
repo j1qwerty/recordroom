@@ -177,6 +177,11 @@ export const httpLocationsService: LocationsApi = {
     return list(await get<Dto[]>('/api/locations/rooms'), toRoom);
   },
 
+  async addRoom(input) {
+    const result = await attempt<Dto>('POST', '/api/locations/rooms', input);
+    return result.ok ? ok(toRoom(result.value)) : err<Room>(result.error, result.field);
+  },
+
   async room(id) {
     const rooms = await httpLocationsService.listRooms();
     return rooms.find((room) => room.id === id) ?? null;
