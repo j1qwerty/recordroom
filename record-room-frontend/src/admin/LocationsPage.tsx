@@ -20,12 +20,14 @@ import { ShelfView } from '../components/ShelfView';
 import { useQuery, useService, useSession } from '../hooks/useService';
 import { cn } from '../lib/utils';
 import type { Room, StorageStatus, StorageUnit } from '../types';
+import type { RoomInput } from '../services/contracts';
 
 const STATUSES: StorageStatus[] = ['Active', 'Maintenance', 'Inactive', 'Decommissioned'];
 
 type Revision = { revision: number; note: string; at: string; actor: string };
 
 type Dialog =
+  | { kind: 'room' }
   | { kind: 'section'; roomId: string }
   | { kind: 'almirah'; sectionId: string }
   | { kind: 'shelf'; almirahId: string }
@@ -126,7 +128,42 @@ export function LocationsPage() {
   }
 
   if (!room) {
-    return <p className="muted">No rooms are configured.</p>;
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          kicker="Physical configuration"
+          title="Record room locations"
+          description="Add a room first, then define its sections, almirahs and shelves."
+          actions={
+            allowed('locations.edit') && (
+              <Button icon={<Plus size={17} />} onClick={() => setDialog({ kind: 'room' })}>
+                Add room
+              </Button>
+            )
+          }
+        />
+        {flash && <Flash tone={flash.tone} text={flash.text} onDismiss={() => setFlash(null)} />}
+        <Card className="py-10 text-center">
+          <div className="mx-auto grid size-12 place-items-center rounded-xl bg-accent-soft text-accent">
+            <Buildings size={24} />
+          </div>
+          <h2 className="mt-4 text-lg font-semibold">No rooms configured yet</h2>
+          <p className="muted mx-auto mt-2 max-w-md text-sm leading-6">
+            Create the first physical room to start mapping sections, almirahs and shelves.
+          </p>
+          {allowed('locations.edit') && (
+            <Button className="mt-5" icon={<Plus size={17} />} onClick={() => setDialog({ kind: 'room' })}>
+              Add first room
+            </Button>
+          )}
+        </Card>
+        <Modal open={dialog?.kind === 'room'} onClose={() => setDialog(null)} title="Add room">
+          {dialog?.kind === 'room' && (
+            <RoomForm onSubmit={(input) => report(service.locations.addRoom(input))} />
+          )}
+        </Modal>
+      </div>
+    );
   }
 
   return (
@@ -137,9 +174,14 @@ export function LocationsPage() {
         description="Room … section … almirah … shelf. Every parent has to be empty before it can be removed, and only active shelves accept new files."
         actions={
           allowed('locations.edit') && (
-            <Button icon={<FloppyDisk size={17} />} onClick={saveLayout}>
-              Save layout
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" icon={<Plus size={17} />} onClick={() => setDialog({ kind: 'room' })}>
+                Add room
+              </Button>
+              <Button icon={<FloppyDisk size={17} />} onClick={saveLayout}>
+                Save layout
+              </Button>
+            </div>
           )
         }
       />
@@ -453,6 +495,12 @@ export function LocationsPage() {
         </div>
       </div>
 
+      <Modal open={dialog?.kind === 'room'} onClose={() => setDialog(null)} title="Add room">
+        {dialog?.kind === 'room' && (
+          <RoomForm onSubmit={(input) => report(service.locations.addRoom(input))} />
+        )}
+      </Modal>
+
       <Modal open={dialog?.kind === 'section'} onClose={() => setDialog(null)} title="Add section">
         {dialog?.kind === 'section' && (
           <SectionForm
@@ -571,6 +619,43 @@ function UnitCard({
         </div>
       )}
     </div>
+  );
+}
+
+function RoomForm({ onSubmit }: { onSubmit: (input: RoomInput) => void }) {
+  const [code, setCode] = useState('');
+  const [name, setName] = useState('');
+  const [building, setBuilding] = useState('');
+  const [floor, setFloor] = useState('');
+  const [capacity, setCapacity] = useState(100);
+
+  return (
+    <form
+      className="space-y-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSubmit({ code, name, building, floor, capacity });
+      }}
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Room code" htmlFor="room-code" required hint="For example, RR-01.">
+          <TextInput id="room-code" value={code} onChange={(event) => setCode(event.target.value)} required />
+        </Field>
+        <Field label="Room name" htmlFor="room-name" required>
+          <TextInput id="room-name" value={name} onChange={(event) => setName(event.target.value)} required />
+        </Field>
+        <Field label="Building" htmlFor="room-building">
+          <TextInput id="room-building" value={building} onChange={(event) => setBuilding(event.target.value)} />
+        </Field>
+        <Field label="Floor" htmlFor="room-floor">
+          <TextInput id="room-floor" value={floor} onChange={(event) => setFloor(event.target.value)} />
+        </Field>
+        <Field label="Storage capacity" htmlFor="room-capacity" hint="Estimated shelf/file capacity.">
+          <TextInput id="room-capacity" type="number" min={1} max={1000000} value={capacity} onChange={(event) => setCapacity(Number(event.target.value))} required />
+        </Field>
+      </div>
+      <Button type="submit">Create room</Button>
+    </form>
   );
 }
 
