@@ -375,6 +375,34 @@ export const filesService: FilesApi = {
     return ok(updated);
   },
 
+  async updateEOfficeReference(fileId, reference) {
+    const file = await filesService.get(fileId);
+    if (!file) return err('File not found.', 'fileId');
+
+    const previous = file.eOfficeReference?.trim() ?? '';
+    const next = reference.trim();
+    const updated: RecordFile = {
+      ...file,
+      eOfficeReference: next || undefined,
+      updatedAt: timestamp().slice(0, 10),
+      updatedBy: session.userName(),
+    };
+
+    store.update((draft) => {
+      const index = draft.files.findIndex((item) => item.id === fileId);
+      if (index >= 0) draft.files[index] = updated;
+      log(draft, {
+        action: 'Update',
+        entity: 'RecordFile',
+        entityId: fileId,
+        before: previous || 'Not linked',
+        after: next || 'Not linked',
+        summary: `Updated e-office reference for ${file.fileBarcode}`,
+      });
+    });
+    return ok(updated);
+  },
+
   async remove(fileId) {
     const file = await filesService.get(fileId);
     if (!file) return err('File not found.', 'fileId');
