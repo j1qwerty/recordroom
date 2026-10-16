@@ -158,7 +158,8 @@ public sealed record FileCreateInput(
     string CodalLife,
     string Description,
     string RecordKind = "File",
-    string DocumentSize = "Other");
+    string DocumentSize = "Other",
+    string? EOfficeReference = null);
 
 public sealed record RelocateInput(int ShelfId, int Position, string Reason);
 
