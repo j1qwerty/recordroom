@@ -46,7 +46,10 @@ export const issuesService: IssueApi = {
       if (query.open && !isOpen(issue)) return false;
       if (search) {
         const haystack =
-          `${issue.borrowerName} ${issue.borrowerEmployeeCode} ${issue.receiptNumber} ${issue.purpose}`.toLowerCase();
+          `${issue.borrowerName} ${issue.borrowerEmployeeCode} ${issue.receiptNumber} ${issue.purpose} ${issue.department} ${issue.lines.map((line) => {
+            const file = state.files.find((record) => record.id === line.fileId);
+            return `${line.fileBarcode} ${file?.subject ?? ''}`;
+          }).join(' ')}`.toLowerCase();
         if (!haystack.includes(search)) return false;
       }
       return true;
