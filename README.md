@@ -64,6 +64,54 @@ sc.exe config MSSQLSERVER start= demand
 net start MSSQLSERVER
 ```
 
+##### If it still fails with `error 10048`
+
+```
+The SQL Server (MSSQLSERVER) service could not be started.
+A service specific error occurred: 10048.
+```
+
+10048 is a socket bind failure: **something else already owns TCP 1433.** Find the
+squatter before starting anything else:
+
+```powershell
+netstat -ano | Select-String ':1433'      # note the PID in the last column
+Get-Process -Id <pid> | Select-Object Name, Path
+Get-CimInstance Win32_Process -Filter "ProcessId=<pid>" |
+    Select-Object CommandLine, CreationDate
+```
+
+On this machine the culprit was an **orphaned SSH tunnel** forwarding local 1433
+to the VPS:
+
+```
+ssh.exe -N -L 1433:127.0.0.1:1433 -o ExitOnForwardFailure=yes ... contabo
+```
+
+`-N` means no remote command, so the tunnel keeps running as a bare background
+forward after the shell that launched it exits — it can survive for days and is
+easy to forget. Kill it and start SQL Server:
+
+```powershell
+Stop-Process -Id <pid> -Force
+Start-Service MSSQLSERVER
+```
+
+⚠️ **Know what `localhost` points at before booting the API.** That same tunnel
+means `Server=localhost;…;Database=RecordRoom` resolves to the **VPS production
+database**, not a local one. With the tunnel up, `dotnet run` applies migrations
+*and* seeds on every startup, and `scripts/test-api.ps1` performs destructive
+writes unless you pass `-SkipDestructive` — so both would hit live data. Confirm
+which database you are on before either:
+
+```powershell
+# local instance?  -> expect MSSQL16.MSSQLSERVER, a Windows logon
+# VPS through the tunnel? -> expect a remote SQL login
+```
+
+To use both at once, re-create the tunnel on a different local port
+(`ssh -N -L 14330:127.0.0.1:1433 contabo`) and leave the local instance on 1433.
+
 If the API is already running, `/api/health` reports the database as unreachable
 rather than crashing, so a clean boot does not prove the database is up — check
 health, not the console.
