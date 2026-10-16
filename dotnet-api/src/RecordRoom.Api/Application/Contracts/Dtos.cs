@@ -157,7 +157,7 @@ public sealed record FileCreateInput(
     string Dealer,
     string CodalLife,
     string Description,
-    string RecordKind = "File",
+    string? RecordKind = null,
     string DocumentSize = "Other",
     string? EOfficeReference = null);
 
