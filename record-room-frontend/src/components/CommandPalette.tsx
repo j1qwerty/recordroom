@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, FileSearch, Search, X } from '@phosphor-icons/react';
+import { ArrowDown, ArrowRight, ArrowUp, MagnifyingGlass, X } from '@phosphor-icons/react';
 import { useNavigate } from 'react-router-dom';
 import { useService, useSession, type Permission } from '../hooks/useService';
 import type { RecordFile } from '../types';
@@ -145,7 +145,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       >
         <h2 id="command-palette-title" className="sr-only">Search pages, files and actions</h2>
         <div className="flex items-center gap-3 border-b border-base px-4">
-          <Search size={20} className="muted shrink-0" />
+          <MagnifyingGlass size={20} className="muted shrink-0" />
           <input
             autoFocus
             value={query}
@@ -190,7 +190,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                       className={`focus-ring flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${index === activeIndex ? 'bg-accent-soft' : 'hover:bg-[var(--rr-surface-2)]'}`}
                     >
                       <span className="grid size-9 shrink-0 place-items-center rounded-lg border border-base bg-[var(--rr-surface)] text-accent">
-                        {group === 'Records' ? <FileSearch size={19} /> : <ArrowRight size={18} />}
+                        {group === 'Records' ? <MagnifyingGlass size={19} /> : <ArrowRight size={18} />}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">{item.label}</span>
