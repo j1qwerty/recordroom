@@ -107,7 +107,7 @@ export function EmployeesPage() {
             <TextInput
               value={search}
               onChange={(event) => patch({ search: event.target.value })}
-              placeholder="Code, name, mobile, designationâ€¦"
+              placeholder="Code, name, mobile, designation…"
               className="pl-10"
               aria-label="Search employees"
             />
