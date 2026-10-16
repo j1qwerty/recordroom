@@ -14,15 +14,17 @@ namespace RecordRoom.Api.Application.Services;
 public interface IUploadsService
 {
     Task<MapUploadDto[]> MapsAsync(string? fileBarcode, string? search, CancellationToken ct = default);
+    Task<Result<MapUploadDto>> UploadMapDocumentAsync(long id, Microsoft.AspNetCore.Http.IFormFile? document, CancellationToken ct = default);
+    Task<PrivateDocumentContent?> OpenMapDocumentAsync(long id, CancellationToken ct = default);
     Task<Result<MapUploadDto>> AddMapAsync(MapUploadInput input, CancellationToken ct = default);
     Task<Result<bool>> RemoveMapAsync(long id, CancellationToken ct = default);
 }
 
-public sealed class UploadsService(AppDbContext db, IAuditWriter audit, ICurrentUserAccessor current) : IUploadsService
+public sealed class UploadsService(AppDbContext db, IAuditWriter audit, ICurrentUserAccessor current, IPrivateDocumentStore documentStore, ILogger<UploadsService> logger) : IUploadsService
 {
     private static MapUploadDto ToDto(MapUpload m) => new(
         m.Id, m.Barcode, m.FileName, m.PageNo, m.Version, Display.Page(m.Status),
-        m.UploadedAt, m.UploadedBy, m.SizeKb);
+        m.UploadedAt, m.UploadedBy, m.SizeKb, !string.IsNullOrWhiteSpace(m.StorageKey), m.ContentType, m.SizeBytes, m.Sha256);
 
     public async Task<MapUploadDto[]> MapsAsync(string? fileBarcode, string? search, CancellationToken ct)
     {
@@ -89,14 +91,69 @@ public sealed class UploadsService(AppDbContext db, IAuditWriter audit, ICurrent
         return Result<MapUploadDto>.Ok(ToDto(map));
     }
 
+
+    public async Task<Result<MapUploadDto>> UploadMapDocumentAsync(long id, Microsoft.AspNetCore.Http.IFormFile? document, CancellationToken ct = default)
+    {
+        var original = await db.Maps.FirstOrDefaultAsync(m => m.Id == id, ct);
+        if (original is null) return Result<MapUploadDto>.Fail("Map row not found.", "id");
+        var storedResult = await documentStore.SaveAsync(document, ct);
+        if (!storedResult.IsSuccess) return Result<MapUploadDto>.Fail(storedResult.Errors);
+        var stored = storedResult.Value;
+        var version = (await db.Maps.AsNoTracking().Where(m => m.Barcode == original.Barcode && m.PageNo == original.PageNo)
+            .Select(m => (int?)m.Version).MaxAsync(ct) ?? 0) + 1;
+        var map = new MapUpload
+        {
+            Barcode = original.Barcode, FileName = stored.OriginalFileName, PageNo = original.PageNo, Version = version,
+            Status = PageStatus.PendingReview, SizeKb = (int)Math.Ceiling(stored.SizeBytes / 1024d),
+            UploadedAt = DateTime.UtcNow, UploadedBy = current.UserName,
+            StorageKey = stored.StorageKey, ContentType = stored.ContentType, SizeBytes = stored.SizeBytes, Sha256 = stored.Sha256
+        };
+        db.Maps.Add(map);
+        if (version > 1)
+        {
+            var prior = await db.Maps.Where(m => m.Barcode == map.Barcode && m.PageNo == map.PageNo
+                && m.Version < version && m.Status == PageStatus.Approved).ToListAsync(ct);
+            foreach (var row in prior) row.Status = PageStatus.Duplicate;
+        }
+        await audit.LogAsync(db, AuditAction.Create, "MapUpload", "pending", $"page={map.PageNo}; version={version - 1}",
+            $"{map.FileName} v{version}; bytes={stored.SizeBytes}; sha256={stored.Sha256}",
+            $"Uploaded map/copy {stored.OriginalFileName} as version {version} for {map.Barcode}", ct);
+        try { await db.SaveChangesAsync(ct); }
+        catch (DbUpdateException ex)
+        {
+            logger.LogWarning(ex, "Could not register map version {Version} for row {MapId}.", version, id);
+            await TryDeleteAsync(stored.StorageKey);
+            return Result<MapUploadDto>.Fail("This map page was updated by another upload. Please retry.", "document");
+        }
+        catch { await TryDeleteAsync(stored.StorageKey); throw; }
+        await audit.AnnounceAsync(RealtimeChannels.Uploads, "map.added", map.Id.ToString(), $"{map.FileName} stored as version {version}");
+        return Result<MapUploadDto>.Ok(ToDto(map));
+    }
+
+    public async Task<PrivateDocumentContent?> OpenMapDocumentAsync(long id, CancellationToken ct = default)
+    {
+        var map = await db.Maps.AsNoTracking().FirstOrDefaultAsync(m => m.Id == id, ct);
+        if (map?.StorageKey is null || map.ContentType is null || map.Sha256 is null) return null;
+        var stream = await documentStore.OpenReadAsync(map.StorageKey, ct);
+        return stream is null ? null : new PrivateDocumentContent(map.FileName, map.ContentType, map.SizeBytes ?? 0, map.Sha256, stream);
+    }
+
+    private async Task TryDeleteAsync(string storageKey)
+    {
+        try { await documentStore.DeleteAsync(storageKey, CancellationToken.None); }
+        catch (Exception ex) { logger.LogError(ex, "Could not clean up document key {StorageKey}.", storageKey); }
+    }
+
     public async Task<Result<bool>> RemoveMapAsync(long id, CancellationToken ct)
     {
         var map = await db.Maps.FirstOrDefaultAsync(m => m.Id == id, ct);
         if (map is null) return Result<bool>.Fail("Map not found.", "id");
+        var storageKey = map.StorageKey;
         db.Maps.Remove(map);
         await audit.LogAsync(db, AuditAction.Delete, "MapUpload", id.ToString(),
             $"{map.FileName} v{map.Version}", "deleted", $"Map page removed for {map.Barcode}");
         await db.SaveChangesAsync(ct);
+        if (!string.IsNullOrWhiteSpace(storageKey)) await TryDeleteAsync(storageKey);
         await audit.AnnounceAsync(RealtimeChannels.Uploads, "map.removed", id.ToString(),
             $"{map.FileName} removed");
         return Result<bool>.Ok(true);
