@@ -1,7 +1,7 @@
 # Digitization document upload — PDF and images
 
-Status: **Implementation is in progress on `feat/recordroom-pdf-image-uploads`**.
-The user's verbatim requirements below remain unchanged. The feature PR will be linked here after it is opened and CI has been checked.
+Status: **Implemented in [PR #2 — Add secure, versioned scanned document uploads](https://github.com/j1qwerty/recordroom/pull/2).** The latest API and frontend CI checks passed on the current implementation.
+The user's verbatim requirements below remain unchanged.
 
 ---
 
