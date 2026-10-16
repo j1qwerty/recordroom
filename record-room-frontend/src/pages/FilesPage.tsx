@@ -71,7 +71,7 @@ export function FilesPage() {
       ...shelf,
       label: [room?.code, section?.code, unit.code, shelf.code].filter(Boolean).join(' / '),
     }));
-  }).filter((shelf) => !query.shelfId || shelf.id === query.shelfId);
+  });
 
   // The API reports the true collection size; the local adapter cannot, so the
   // label falls back to the figure the registry has always claimed.
