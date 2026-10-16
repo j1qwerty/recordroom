@@ -354,6 +354,24 @@ upsert_env FileStorage__MaxUploadBytes "50331648"
 # whether a Redis that is down at boot is retried in the background (good) or
 # demotes the process to the in-memory cache until the next restart (bad).
 upsert_env Redis__ConnectionString "127.0.0.1:6379,abortConnect=false"
+
+# Fixed-window rate limits on the credential endpoints. Values are in the API
+# (RateLimitPolicies); they are written here so an operator can loosen or
+# tighten the guessing surface without a rebuild. OTP/PIN guessing is the
+# threat these address, so the credential limits stay well below the API cap.
+upsert_env RateLimiting__Enabled "true"
+upsert_env RateLimiting__Login__Limit "10"
+upsert_env RateLimiting__Login__WindowSeconds "60"
+upsert_env RateLimiting__OtpRequest__Limit "5"
+upsert_env RateLimiting__OtpRequest__WindowSeconds "300"
+upsert_env RateLimiting__OtpVerify__Limit "10"
+upsert_env RateLimiting__OtpVerify__WindowSeconds "60"
+upsert_env RateLimiting__Pin__Limit "10"
+upsert_env RateLimiting__Pin__WindowSeconds "60"
+upsert_env RateLimiting__Recovery__Limit "3"
+upsert_env RateLimiting__Recovery__WindowSeconds "900"
+upsert_env RateLimiting__Api__Limit "600"
+upsert_env RateLimiting__Api__WindowSeconds "60"
 chmod 640 "$envfile"
 chown root:www-data "$envfile"
 

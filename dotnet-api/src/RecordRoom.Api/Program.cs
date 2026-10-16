@@ -13,6 +13,7 @@ using RecordRoom.Api.Infrastructure.Auth;
 using RecordRoom.Api.Infrastructure.Cache;
 using RecordRoom.Api.Infrastructure.Data;
 using RecordRoom.Api.Infrastructure.Jobs;
+using RecordRoom.Api.Infrastructure.RateLimiting;
 using RecordRoom.Api.Infrastructure.Realtime;
 using StackExchange.Redis;
 
@@ -83,30 +84,45 @@ builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
 // ------------------------------------------------------------------ redis/cache
 builder.Services.AddMemoryCache();
 var redisConnection = builder.Configuration["Redis:ConnectionString"];
+
+// One multiplexer, shared by the cache, the SignalR backplane and the rate
+// limiter. Connecting once avoids three pools and three connection attempts.
+// A null result is legitimate and means "no Redis": every consumer degrades.
+builder.Services.AddSingleton<IConnectionMultiplexer?>(sp =>
+{
+    if (string.IsNullOrWhiteSpace(redisConnection)) return null;
+    var log = sp.GetRequiredService<ILogger<Program>>();
+    try
+    {
+        // abortConnect=false (set in the connection string on the VPS) means a
+        // Redis that is down at boot does not throw: the multiplexer retries in
+        // the background and the app starts degraded instead of not at all.
+        var mux = ConnectionMultiplexer.Connect(redisConnection);
+        log.LogInformation("Redis connected at {Redis}.", redisConnection);
+        return mux;
+    }
+    catch (Exception ex)
+    {
+        // Only an unusable connection string lands here. Redis is optional, so this
+        // must not prevent startup.
+        log.LogWarning(ex, "Redis unavailable at {Redis}; running without it.", redisConnection);
+        return null;
+    }
+});
+
 builder.Services.AddSingleton<ICacheService>(sp =>
 {
     var memory = sp.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>();
     var log = sp.GetRequiredService<ILogger<Program>>();
+    var mux = sp.GetRequiredService<IConnectionMultiplexer?>();
 
-    if (string.IsNullOrWhiteSpace(redisConnection))
+    if (mux is null)
     {
-        log.LogInformation("No Redis:ConnectionString configured; using the in-memory cache.");
+        log.LogInformation("No usable Redis connection; using the in-memory cache.");
         return new MemoryCacheService(memory);
     }
 
-    try
-    {
-        var mux = ConnectionMultiplexer.Connect(redisConnection);
-        log.LogInformation("Redis connected at {Redis}.", redisConnection);
-        return new RedisCacheService(mux, memory, sp.GetRequiredService<ILogger<RedisCacheService>>());
-    }
-    catch (Exception ex)
-    {
-        // Redis is optional. A bad host or a stopped server must degrade to the
-        // in-memory cache rather than preventing startup.
-        log.LogWarning(ex, "Redis unavailable at {Redis}; falling back to the in-memory cache.", redisConnection);
-        return new MemoryCacheService(memory);
-    }
+    return new RedisCacheService(mux, memory, sp.GetRequiredService<ILogger<RedisCacheService>>());
 });
 
 // ----------------------------------------------------------------------- hangfire
@@ -161,10 +177,31 @@ builder.Services.AddControllers()
 
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(
     new System.Text.Json.Serialization.JsonStringEnumConverter()));
-builder.Services.AddSignalR();
+var signalR = builder.Services.AddSignalR();
+
+// Redis backplane for SignalR. Without it, realtime events raised on one API
+// node never reach a client connected to another, so a second node silently
+// halves delivery.
+//
+// Registered only when a connection string is present: a deployment without
+// Redis must keep working with node-local hub groups rather than throwing.
+// This package builds its own multiplexer, so the backplane tolerates Redis
+// being down independently of the shared one used by the cache and rate limiter.
+if (!string.IsNullOrWhiteSpace(redisConnection))
+{
+    signalR.AddStackExchangeRedis(redisConnection, options =>
+    {
+        // Namespaced so the backplane's pub/sub channels cannot collide with the
+        // other applications sharing this Redis instance.
+        options.Configuration.ChannelPrefix = RedisChannel.Literal("recordroom:signalr:");
+    });
+}
 builder.Services.AddEndpointsApiExplorer();
 
 const string BearerScheme = "bearer";
+// Fixed-window limits on the write endpoints, shared across nodes via Redis.
+builder.Services.AddRecordRoomRateLimiting(builder.Configuration);
+
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "Record Room API", Version = "v1" });
@@ -223,6 +260,11 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue("Swagger:Enabl
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+// Ahead of authentication on purpose: the endpoints that matter for abuse are
+// the anonymous credential ones, and a limit applied after auth would never see
+// an unauthenticated attempt.
+app.UseRecordRoomRateLimiting();
 
 app.UseCors();
 app.UseAuthentication();
