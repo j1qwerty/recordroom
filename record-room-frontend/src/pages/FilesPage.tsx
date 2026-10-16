@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DownloadSimple, Funnel, MagnifyingGlass, Plus, UploadSimple } from '@phosphor-icons/react';
+import { ArrowsLeftRight, DownloadSimple, Eye, Funnel, MagnifyingGlass, MapPin, Plus, UploadSimple } from '@phosphor-icons/react';
 import { Link } from 'react-router-dom';
 import { Badge } from '../components/ui/Badge';
 import { PageHeader } from '../components/ui/PageHeader';
@@ -107,7 +107,7 @@ export function FilesPage() {
       file.department,
       file.year,
       file.status,
-      file.recordKind ?? (file.documentSize === 'A0' || file.fileType === 'Map' ? 'Map' : 'File'),
+      file.recordKind ?? (file.fileType === 'Map' ? 'Map' : 'File'),
       file.documentSize ?? 'Other',
       file.fileType,
       file.eOfficeReference ?? '',
@@ -284,7 +284,7 @@ export function FilesPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1180px] text-left text-sm">
+            <table className="w-full min-w-[1300px] text-left text-sm">
               <thead className="bg-[var(--rr-bg)] text-xs uppercase tracking-wider muted">
                 <tr>
                   <th className="px-5 py-3">File</th>
@@ -296,6 +296,7 @@ export function FilesPage() {
                   <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3">Location</th>
                   <th className="px-5 py-3">Last movement</th>
+                  <th className="sticky right-0 bg-[var(--rr-bg)] px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--rr-border)]">
@@ -310,7 +311,7 @@ export function FilesPage() {
                     </td>
                     <td className="px-5 py-4">
                       {(() => {
-                        const kind = file.recordKind ?? (file.documentSize === 'A0' || file.fileType === 'Map' ? 'Map' : 'File');
+                        const kind = file.recordKind ?? (file.fileType === 'Map' ? 'Map' : 'File');
                         return <div className="space-y-1.5"><Badge tone={kind === 'Map' ? 'info' : 'neutral'}>{kind}</Badge><div className="text-xs muted">{file.fileType}</div></div>;
                       })()}
                     </td>
@@ -330,6 +331,46 @@ export function FilesPage() {
                     </td>
                     <td className="px-5 py-4 text-xs">{file.location}</td>
                     <td className="px-5 py-4 text-xs muted">{file.lastMovement}</td>
+                    <td className="sticky right-0 bg-[var(--rr-surface)] px-3 py-3">
+                      <div className="flex items-center justify-end gap-1">
+                        <Link
+                          to={`/files/${file.id}`}
+                          className="focus-ring grid size-9 place-items-center rounded-lg text-accent hover:bg-accent-soft"
+                          aria-label={`View ${file.fileNumber}`}
+                          title="View file"
+                        >
+                          <Eye size={17} />
+                        </Link>
+                        {allowed('files.edit') && (
+                          <Link
+                            to={`/files/${file.id}#record-attachments`}
+                            className="focus-ring grid size-9 place-items-center rounded-lg muted hover:bg-[var(--rr-surface-2)] hover:text-accent"
+                            aria-label={`Upload scanned file for ${file.fileNumber}`}
+                            title="Upload scanned file"
+                          >
+                            <UploadSimple size={17} />
+                          </Link>
+                        )}
+                        {allowed('files.edit') && (
+                          <Link
+                            to={`/files/${file.id}#relocate-file`}
+                            className="focus-ring grid size-9 place-items-center rounded-lg muted hover:bg-[var(--rr-surface-2)] hover:text-accent"
+                            aria-label={`Move ${file.fileNumber}`}
+                            title="Move file"
+                          >
+                            <ArrowsLeftRight size={17} />
+                          </Link>
+                        )}
+                        <Link
+                          to={`/admin/maps?fileBarcode=${encodeURIComponent(file.fileBarcode)}`}
+                          className="focus-ring grid size-9 place-items-center rounded-lg muted hover:bg-[var(--rr-surface-2)] hover:text-accent"
+                          aria-label={`View maps and copies for ${file.fileNumber}`}
+                          title="Maps and copies"
+                        >
+                          <MapPin size={17} />
+                        </Link>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
