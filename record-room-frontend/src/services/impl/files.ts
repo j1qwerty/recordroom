@@ -381,6 +381,7 @@ export const filesService: FilesApi = {
 
     const previous = file.eOfficeReference?.trim() ?? '';
     const next = reference.trim();
+    if (next.length > 200) return err('E-office reference must be 200 characters or fewer.', 'eOfficeReference');
     const updated: RecordFile = {
       ...file,
       eOfficeReference: next || undefined,
