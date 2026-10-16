@@ -208,6 +208,7 @@ export interface FilesApi {
     position: number,
     reason: string,
   ): Promise<Result<RecordFile>>;
+  updateEOfficeReference(fileId: string, reference: string): Promise<Result<RecordFile>>;
   remove(fileId: string): Promise<Result<true>>;
 }
 
