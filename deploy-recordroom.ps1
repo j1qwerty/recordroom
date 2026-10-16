@@ -355,6 +355,12 @@ upsert_env FileStorage__MaxUploadBytes "50331648"
 # demotes the process to the in-memory cache until the next restart (bad).
 upsert_env Redis__ConnectionString "127.0.0.1:6379,abortConnect=false"
 
+# Hangfire in SQL Server rather than memory. In-memory storage loses every job on
+# restart, and with two API nodes each would run the overdue sweep on its own
+# schedule, so the same receipt gets marked overdue twice. The database login is
+# db_owner, so Hangfire can create its own schema on first boot.
+upsert_env Hangfire__Storage "SqlServer"
+
 # Fixed-window rate limits on the credential endpoints. Values are in the API
 # (RateLimitPolicies); they are written here so an operator can loosen or
 # tighten the guessing surface without a rebuild. OTP/PIN guessing is the
