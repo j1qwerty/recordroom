@@ -34,6 +34,10 @@ public class DigitizationPage
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
     public string UploadedBy { get; set; } = string.Empty;
     public bool Bulk { get; set; }
+    public string? StorageKey { get; set; }
+    public string? ContentType { get; set; }
+    public long? SizeBytes { get; set; }
+    public string? Sha256 { get; set; }
 
     public DigitizationBatch? Batch { get; set; }
     public RecordFile? RecordFile { get; set; }
@@ -51,6 +55,10 @@ public class MapUpload
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
     public string UploadedBy { get; set; } = string.Empty;
     public int SizeKb { get; set; }
+    public string? StorageKey { get; set; }
+    public string? ContentType { get; set; }
+    public long? SizeBytes { get; set; }
+    public string? Sha256 { get; set; }
 
     public RecordFile? RecordFile { get; set; }
 }
