@@ -315,6 +315,10 @@ export interface DigitizationPage {
   uploadedAt: string;
   uploadedBy: string;
   bulk: boolean;
+  hasDocument?: boolean;
+  contentType?: string;
+  sizeBytes?: number;
+  sha256?: string;
 }
 
 export interface DigitizationBatch {
@@ -342,6 +346,24 @@ export interface MapUpload {
   uploadedAt: string;
   uploadedBy: string;
   sizeKb: number;
+  hasDocument?: boolean;
+  contentType?: string;
+  sizeBytes?: number;
+  sha256?: string;
+}
+
+/** File-level attachment metadata. Uploaded bytes are served by an authenticated endpoint. */
+export interface RecordFileDocument {
+  id: string;
+  fileId: string;
+  fileBarcode: string;
+  version: number;
+  filename: string;
+  contentType: string;
+  sizeBytes: number;
+  sha256: string;
+  uploadedAt: string;
+  uploadedBy: string;
 }
 
 // ------------------------------------------------------------------- barcodes
