@@ -162,6 +162,7 @@ public sealed record FileCreateInput(
     string? EOfficeReference = null);
 
 public sealed record RelocateInput(int ShelfId, int Position, string Reason);
+public sealed record EOfficeReferenceInput(string? EOfficeReference);
 
 /// <summary>
 /// Paged envelope. <c>collectionTotal</c> is the true registry size so the UI can
