@@ -20,6 +20,7 @@ public class LocationsController(ILocationsService locations) : ControllerBase
         return Results.Ok(ApiResponse<RoomDto[]>.Ok(rooms.IsSuccess ? rooms.Value! : []));
     }
 
+    [HttpGet("rooms/{id:int}")]
     public async Task<IResult> Room(int id, CancellationToken ct)
     {
         var room = await locations.RoomAsync(id, ct);
