@@ -442,11 +442,20 @@ EOF
   # First boot applies migrations + seeds, so allow up to ~2 minutes.
   ok=0
   for i in $(seq 1 24); do
-    if curl -fsS "http://127.0.0.1:$APIPORT/api/health" >/dev/null; then ok=1; break; fi
+    if curl -fsS "http://127.0.0.1:$APIPORT/api/health" 2>/dev/null | grep -Fq '"status":"Healthy"'; then ok=1; break; fi
     sleep 5
   done
   [ "$ok" = "1" ] || { journalctl -u recordroom-api --no-pager -n 30; exit 1; }
-  curl -fsS "http://127.0.0.1:$APIPORT/api/health"
+  # Assert on the body, not just the status code. `curl -f` alone passes on a 200
+  # that reports "Degraded", which is how a failed migration previously slipped
+  # through and left every data endpoint returning 500.
+  health_body=$(curl -fsS "http://127.0.0.1:$APIPORT/api/health")
+  echo "$health_body" | grep -Fq '"status":"Healthy"' || {
+    echo "api health is not Healthy: $health_body"
+    journalctl -u recordroom-api --no-pager -n 40
+    exit 1
+  }
+  echo "$health_body"
   echo "api up on 127.0.0.1:$APIPORT"
 fi
 
@@ -563,7 +572,10 @@ echo "recordroom $MODE deployed"
         Write-Step 'Verify live site'
         if ($deployApi -or $Target -eq 'both') {
             $health = (Invoke-Checked ssh @('-o', 'BatchMode=yes', $Host_, "curl -fsS 'http://127.0.0.1:$ApiPort/api/health'") -What 'API health check')
-            Write-Ok "API /api/health answers (via VPS): $($health.Trim())"
+            if ($health -notmatch '"status"\s*:\s*"Healthy"') {
+                Fail "API reported unhealthy after deploy: $($health.Trim())"
+            }
+            Write-Ok "API /api/health reports Healthy (via VPS): $($health.Trim())"
         }
         $homeMark = (Invoke-Checked ssh @('-o', 'BatchMode=yes', $Host_, "curl -fsS 'http://127.0.0.1:$WebPort/' | grep -c 'Record Room'") -What 'web homepage check').Trim()
         if ($homeMark -eq '0') { Fail 'web homepage did not contain the expected markup' }

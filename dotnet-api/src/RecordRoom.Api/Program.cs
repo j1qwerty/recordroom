@@ -273,6 +273,19 @@ app.MapGet("/api/health", async (AppDbContext db, ICacheService cache) =>
     {
         dbOk = await db.Database.CanConnectAsync();
         if (!dbOk) dbError = "Not reachable";
+
+        // Reachability is not the same as a usable schema. A migration that fails
+        // on boot leaves the process alive and the port open, so without this the
+        // deploy health check passes while every data endpoint returns 500.
+        if (dbOk)
+        {
+            var pending = (await db.Database.GetPendingMigrationsAsync()).ToArray();
+            if (pending.Length > 0)
+            {
+                dbOk = false;
+                dbError = $"{pending.Length} pending migration(s): {string.Join(", ", pending)}";
+            }
+        }
     }
     catch (Exception ex)
     {
