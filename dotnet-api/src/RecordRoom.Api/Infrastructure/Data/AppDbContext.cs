@@ -25,6 +25,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<DigitizationBatch> Batches => Set<DigitizationBatch>();
     public DbSet<DigitizationPage> Pages => Set<DigitizationPage>();
     public DbSet<MapUpload> Maps => Set<MapUpload>();
+    public DbSet<RecordFileDocument> FileDocuments => Set<RecordFileDocument>();
     public DbSet<BulkImportJob> BulkJobs => Set<BulkImportJob>();
     public DbSet<BulkImportRow> BulkRows => Set<BulkImportRow>();
     public DbSet<BarcodeJob> BarcodeJobs => Set<BarcodeJob>();
@@ -184,6 +185,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<DigitizationPage>(e =>
         {
             e.ToTable("DigitizationPages");
+            e.Property(x => x.StorageKey).HasMaxLength(80);
+            e.Property(x => x.ContentType).HasMaxLength(100);
+            e.Property(x => x.Sha256).HasMaxLength(64);
             e.HasIndex(x => new { x.Barcode, x.PageNo, x.Version }).IsUnique();
             e.HasOne(x => x.RecordFile).WithMany(x => x.Pages).HasForeignKey(x => x.Barcode)
                 .HasPrincipalKey(x => x.Barcode).OnDelete(DeleteBehavior.Restrict);
@@ -192,9 +196,25 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         b.Entity<MapUpload>(e =>
         {
             e.ToTable("MapUploads");
+            e.Property(x => x.StorageKey).HasMaxLength(80);
+            e.Property(x => x.ContentType).HasMaxLength(100);
+            e.Property(x => x.Sha256).HasMaxLength(64);
             e.HasIndex(x => new { x.Barcode, x.PageNo, x.Version }).IsUnique();
             e.HasOne(x => x.RecordFile).WithMany(x => x.Maps).HasForeignKey(x => x.Barcode)
                 .HasPrincipalKey(x => x.Barcode).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<RecordFileDocument>(e =>
+        {
+            e.ToTable("RecordFileDocuments");
+            e.Property(x => x.OriginalFileName).HasMaxLength(255);
+            e.Property(x => x.StorageKey).HasMaxLength(80);
+            e.Property(x => x.ContentType).HasMaxLength(100);
+            e.Property(x => x.Sha256).HasMaxLength(64);
+            e.Property(x => x.UploadedBy).HasMaxLength(256);
+            e.HasIndex(x => new { x.RecordFileId, x.Version }).IsUnique();
+            e.HasOne(x => x.RecordFile).WithMany(x => x.Documents)
+                .HasForeignKey(x => x.RecordFileId).OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<BulkImportJob>(e =>
