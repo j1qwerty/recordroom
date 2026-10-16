@@ -29,6 +29,7 @@ function matchSearch(file: RecordFile, needle: string): boolean {
     file.dealer,
     file.recordKind ?? (file.fileType === 'Map' ? 'Map' : 'File'),
     file.documentSize ?? '',
+    file.eOfficeReference ?? '',
   ]
     .join(' ')
     .toLowerCase();
@@ -66,6 +67,9 @@ export const filesService: FilesApi = {
       const recordKind = file.recordKind ?? (file.fileType === 'Map' ? 'Map' : 'File');
       if (query.recordKind && query.recordKind !== 'All' && recordKind !== query.recordKind) return false;
       if (query.fileType && query.fileType !== 'All' && file.fileType !== query.fileType) return false;
+      const hasEOffice = Boolean(file.eOfficeReference?.trim());
+      if (query.eOfficeStatus === 'Linked' && !hasEOffice) return false;
+      if (query.eOfficeStatus === 'Not linked' && hasEOffice) return false;
       if (query.roomId && file.roomId !== query.roomId) return false;
       if (query.sectionId && file.sectionId !== query.sectionId) return false;
       if (query.shelfId && file.shelfId !== query.shelfId) return false;
@@ -225,6 +229,7 @@ export const filesService: FilesApi = {
       fileType: input.fileType,
       recordKind: input.recordKind ?? (input.documentSize === 'A0' ? 'Map' : input.fileType === 'Map' ? 'Map' : 'File'),
       documentSize: input.documentSize ?? 'Other',
+      eOfficeReference: input.eOfficeReference?.trim() || undefined,
       status: 'Available',
       location: locationPath(room, section, unit, shelf),
       roomId: room?.id ?? '',
