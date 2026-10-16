@@ -34,6 +34,7 @@ const emptyForm: FileCreateInput = {
   fileType: 'File',
   recordKind: 'File',
   documentSize: 'A4',
+  eOfficeReference: '',
   shelfId: '',
   position: 1,
   pincode: '',
@@ -357,6 +358,14 @@ export function NewFilePage() {
                           </option>
                         ))}
                       </SelectInput>
+                    </Field>
+                    <Field label="E-office file name / ID" htmlFor="file-eoffice-reference" hint="Optional. Paste the filename or reference assigned by e-office.">
+                      <TextInput
+                        id="file-eoffice-reference"
+                        value={form.eOfficeReference ?? ''}
+                        onChange={(event) => set('eOfficeReference', event.target.value)}
+                        placeholder="e.g. EOFFICE/REV/2026/00123"
+                      />
                     </Field>
                     <Field label="Record kind" htmlFor="file-record-kind" required hint="A0 defaults to Map; choose File or Map explicitly when needed.">
                       <SelectInput
