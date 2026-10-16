@@ -31,6 +31,11 @@ public class LocationsController(ILocationsService locations) : ControllerBase
     public async Task<IResult> Areas(CancellationToken ct) =>
         Results.Ok(ApiResponse<AreaDto[]>.Ok(await locations.AreasAsync(ct)));
 
+    [Authorize(Roles = "Admin,Supervisor")]
+    [HttpPost("rooms")]
+    public async Task<IResult> AddRoom(RoomInput input, CancellationToken ct) =>
+        ApiResults.FromResult(await locations.AddRoomAsync(input, ct));
+
     [HttpGet("rooms/{roomId:int}/layout/revisions")]
     public async Task<IResult> Revisions(int roomId, CancellationToken ct) =>
         Results.Ok(ApiResponse<LayoutRevisionDto[]>.Ok(await locations.LayoutRevisionsAsync(roomId, ct)));
