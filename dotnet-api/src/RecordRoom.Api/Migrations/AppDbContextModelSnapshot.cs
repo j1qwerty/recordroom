@@ -861,6 +861,10 @@ namespace RecordRoom.Api.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("nvarchar(16)");
 
+                    b.Property<string>("EOfficeReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("RecordKind")
                         .IsRequired()
                         .HasMaxLength(8)
