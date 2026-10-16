@@ -57,7 +57,7 @@ public sealed class PrivateDocumentStoreTests
         {
             var result = await store.SaveAsync(file);
             Assert.False(result.IsSuccess);
-            Assert.Contains(result.Errors, error => error.Message.Contains("signature", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(result.Errors, error => error.Message.Contains("does not match", StringComparison.OrdinalIgnoreCase));
         }
         finally
         {
