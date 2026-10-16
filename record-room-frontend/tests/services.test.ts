@@ -64,6 +64,34 @@ beforeEach(async () => {
   await service.auth.signIn('admin', service.auth.demoPassword);
 });
 
+describe('locations.addRoom', () => {
+  it('creates a room and makes it available in the location hierarchy', async () => {
+    const result = await service.locations.addRoom({
+      code: 'RR-UX-01',
+      name: 'UX Test Room',
+      building: 'Main building',
+      floor: 'Ground',
+      capacity: 75,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.code).toBe('RR-UX-01');
+    expect(result.value.capacity).toBe(75);
+    expect((await service.locations.listRooms()).some((room) => room.id === result.value.id)).toBe(true);
+  });
+
+  it('rejects duplicate room codes without creating a second room', async () => {
+    const first = await service.locations.addRoom({ code: 'RR-UX-02', name: 'First room' });
+    expect(first.ok).toBe(true);
+    const before = (await service.locations.listRooms()).length;
+
+    const duplicate = await service.locations.addRoom({ code: 'rr-ux-02', name: 'Duplicate room' });
+    expect(duplicate.ok).toBe(false);
+    expect((await service.locations.listRooms()).length).toBe(before);
+  });
+});
+
 describe('files.validateCreate', () => {
   it('refuses a barcode that already exists', async () => {
     const existing = (await service.files.list({ pageSize: 1 })).items[0];
