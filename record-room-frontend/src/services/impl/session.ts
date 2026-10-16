@@ -18,17 +18,51 @@ const SESSION_KEY = 'rr-session';
 let current: AppUser | null = null;
 const listeners = new Set<() => void>();
 
+/**
+ * Last raw string that was parsed, and the object it produced.
+ *
+ * `session.get` is the `getSnapshot` for `useSyncExternalStore` in the route
+ * guard and in `useSession`, and React requires that snapshot to be referentially
+ * stable across calls. Parsing localStorage on every call returned a brand new
+ * object each time, so React saw the session as changed on every render and the
+ * app looped until it hit React's maximum update depth (error #185). This cache
+ * is keyed on the raw string, so it re-parses exactly when storage really
+ * changes -- including a change made in another tab -- and never otherwise.
+ */
+let lastParsedRaw: string | null = null;
+let lastParsedUser: AppUser | null = null;
+
+function parseStored(raw: string | null): AppUser | null {
+  if (raw === lastParsedRaw) return lastParsedUser;
+
+  lastParsedRaw = raw;
+  if (!raw) {
+    lastParsedUser = null;
+    return null;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) {
+      lastParsedUser = null;
+      return null;
+    }
+    const candidate = parsed as Partial<AppUser>;
+    lastParsedUser =
+      typeof candidate.id === 'string' && typeof candidate.role === 'string'
+        ? (candidate as AppUser)
+        : null;
+  } catch {
+    lastParsedUser = null;
+  }
+
+  return lastParsedUser;
+}
+
 function readStored(): AppUser | null {
   if (typeof localStorage === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null) return null;
-    const candidate = parsed as Partial<AppUser>;
-    return typeof candidate.id === 'string' && typeof candidate.role === 'string'
-      ? (candidate as AppUser)
-      : null;
+    return parseStored(localStorage.getItem(SESSION_KEY));
   } catch {
     return null;
   }

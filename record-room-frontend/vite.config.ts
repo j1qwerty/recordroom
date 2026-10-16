@@ -8,6 +8,15 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
+    // Dev-only convenience: proxying /api and /hubs to the deployed API keeps the
+    // browser on one origin, so a developer does not need the API to list
+    // http://localhost:5173 in its CORS allowlist. Build output is unaffected.
+    proxy: process.env.RR_API_PROXY
+      ? {
+          '/api': { target: process.env.RR_API_PROXY, changeOrigin: true },
+          '/hubs': { target: process.env.RR_API_PROXY, changeOrigin: true, ws: true },
+        }
+      : undefined,
   },
   build: {
     sourcemap: false,
