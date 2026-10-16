@@ -48,7 +48,7 @@ export const issuesService: IssueApi = {
         const haystack =
           `${issue.borrowerName} ${issue.borrowerEmployeeCode} ${issue.receiptNumber} ${issue.purpose} ${issue.department} ${issue.lines.map((line) => {
             const file = state.files.find((record) => record.id === line.fileId);
-            return `${line.fileBarcode} ${file?.subject ?? ''}`;
+            return `${line.fileBarcode} ${file?.subject ?? ''} ${file?.eOfficeReference ?? ''}`;
           }).join(' ')}`.toLowerCase();
         if (!haystack.includes(search)) return false;
       }
