@@ -237,6 +237,7 @@ export function ReturnPage() {
                           </p>
                           <p className="muted mt-0.5 text-[11px]">
                             {isBack ? `Returned ${line.returnedAt}` : file?.location}
+                          {' · E-office: '}{file?.eOfficeReference?.trim() || 'Not linked'}
                           </p>
                         </div>
                       </label>
