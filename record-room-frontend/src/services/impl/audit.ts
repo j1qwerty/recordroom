@@ -3,7 +3,7 @@
  *
  * Every mutating service calls `log()` inside the same `store.update()` draft
  * as the change itself, so an audit row can never drift from the data it
- * describes â€” the transactional guarantee the legacy app lacked.
+ * describes — the transactional guarantee the legacy app lacked.
  */
 
 import { type AuditApi, type AuditQuery } from '../contracts';
