@@ -24,6 +24,8 @@ public sealed class FileQuery
     public string? Search { get; init; }
     public string? Department { get; init; }
     public string? Status { get; init; }
+    public string? RecordKind { get; init; }
+    public string? FileType { get; init; }
     public int? RoomId { get; init; }
     public int? SectionId { get; init; }
     public int? ShelfId { get; init; }
@@ -64,7 +66,7 @@ public sealed class FilesService(
         f.Shelf?.Code ?? string.Empty, f.ShelfBarcode, f.ApproxPosition,
         f.Pincode, f.Area, f.PropertyNo, f.PropertyArea, f.Dealer, f.CodalLife,
         f.CreatedAt, f.CreatedBy, f.UpdatedAt, f.UpdatedBy, Stamp(f.LastMovementAt),
-        f.Holder, f.HolderEmployeeCode, f.Description);
+        f.Holder, f.HolderEmployeeCode, f.Description, f.RecordKind, f.DocumentSize);
 
     private async Task<FileDto?> ProjectAsync(RecordFile f, CancellationToken ct)
     {
@@ -100,6 +102,16 @@ public sealed class FilesService(
         {
             var status = Display.ParseRecord(q.Status) ?? RecordStatus.Available;
             query = query.Where(f => f.Status == status);
+        }
+        if (!string.IsNullOrWhiteSpace(q.RecordKind) && q.RecordKind != "All")
+        {
+            var recordKind = string.Equals(q.RecordKind, "Map", StringComparison.OrdinalIgnoreCase) ? "Map" : "File";
+            query = query.Where(f => f.RecordKind == recordKind);
+        }
+        if (!string.IsNullOrWhiteSpace(q.FileType) && q.FileType != "All")
+        {
+            var fileKind = ParseKind(q.FileType);
+            query = query.Where(f => f.FileKind == fileKind);
         }
         if (q.RoomId is not null) query = query.Where(f => f.RoomId == q.RoomId);
         if (q.SectionId is not null) query = query.Where(f => f.SectionId == q.SectionId);
@@ -248,6 +260,9 @@ public sealed class FilesService(
             Department = input.Department.Trim(),
             Year = input.Year,
             FileKind = ParseKind(input.FileType),
+            RecordKind = string.Equals(input.RecordKind, "Map", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(input.DocumentSize, "A0", StringComparison.OrdinalIgnoreCase) ? "Map" : "File",
+            DocumentSize = input.DocumentSize is "A0" or "A1" or "A2" or "A3" or "A4" ? input.DocumentSize : "Other",
             Status = RecordStatus.Available,
             RoomId = room.Id,
             SectionId = unit.SectionId,
