@@ -440,7 +440,7 @@ public sealed class FilesService(
 
         foreach (var key in documentKeys)
         {
-            try { await documentStorage.DeleteAsync(key, CancellationToken.None); }
+            try { await documentStore.DeleteAsync(key, CancellationToken.None); }
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "Could not remove attachment content {StorageKey} after record {FileId} deletion.", key, id);
