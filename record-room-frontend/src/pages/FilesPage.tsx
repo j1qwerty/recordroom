@@ -91,6 +91,8 @@ export function FilesPage() {
       'Record kind',
       'Document size',
       'Type',
+      'E-office reference',
+      'E-office linked',
       'Room',
       'Section',
       'Almirah',
@@ -108,6 +110,8 @@ export function FilesPage() {
       file.recordKind ?? (file.documentSize === 'A0' || file.fileType === 'Map' ? 'Map' : 'File'),
       file.documentSize ?? 'Other',
       file.fileType,
+      file.eOfficeReference ?? '',
+      file.eOfficeReference?.trim() ? 'Yes' : 'No',
       file.location,
       file.section,
       file.almirah,
@@ -150,7 +154,7 @@ export function FilesPage() {
             <TextInput
               value={query.search ?? ''}
               onChange={(event) => patch({ search: event.target.value })}
-              placeholder="Barcode, number, subject, holder, area…"
+              placeholder="Barcode, number, subject, holder, area or e-office reference…"
               className="pl-10 xl:col-span-2"
               aria-label="Search files"
             />
@@ -196,6 +200,15 @@ export function FilesPage() {
             {(['Letter', 'File', 'Register', 'Map', 'Drawing', 'Report'] as FileType[]).map((type) => (
               <option key={type} value={type}>{type}</option>
             ))}
+          </SelectInput>
+          <SelectInput
+            value={query.eOfficeStatus ?? 'All'}
+            onChange={(event) => patch({ eOfficeStatus: event.target.value as FileQuery['eOfficeStatus'] })}
+            aria-label="Filter by e-office link"
+          >
+            <option value="All">E-office: all</option>
+            <option value="Linked">Linked to e-office</option>
+            <option value="Not linked">Not linked to e-office</option>
           </SelectInput>
           <SelectInput
             value={query.roomId ?? ''}
@@ -261,7 +274,7 @@ export function FilesPage() {
                 loading ? undefined : (
                   <Button
                     variant="ghost"
-                    onClick={() => patch({ search: '', department: 'All', status: 'All', recordKind: 'All', fileType: 'All', roomId: undefined, sectionId: undefined, shelfId: undefined })}
+                    onClick={() => patch({ search: '', department: 'All', status: 'All', recordKind: 'All', fileType: 'All', eOfficeStatus: 'All', roomId: undefined, sectionId: undefined, shelfId: undefined })}
                   >
                     Clear filters
                   </Button>
@@ -277,6 +290,7 @@ export function FilesPage() {
                   <th className="px-5 py-3">File</th>
                   <th className="px-5 py-3">Kind / type</th>
                   <th className="px-5 py-3">Size</th>
+                  <th className="px-5 py-3">E-office</th>
                   <th className="px-5 py-3">Department</th>
                   <th className="px-5 py-3">Year</th>
                   <th className="px-5 py-3">Status</th>
@@ -301,6 +315,14 @@ export function FilesPage() {
                       })()}
                     </td>
                     <td className="px-5 py-4 text-xs font-medium">{file.documentSize ?? 'Other'}</td>
+                    <td className="px-5 py-4">
+                      {file.eOfficeReference?.trim() ? (
+                        <div className="space-y-1.5">
+                          <Badge tone="success">Linked</Badge>
+                          <p className="max-w-48 break-all font-mono text-[11px]">{file.eOfficeReference}</p>
+                        </div>
+                      ) : <Badge tone="neutral">Not linked</Badge>}
+                    </td>
                     <td className="px-5 py-4">{file.department}</td>
                     <td className="px-5 py-4">{file.year}</td>
                     <td className="px-5 py-4">
