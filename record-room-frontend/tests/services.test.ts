@@ -169,12 +169,12 @@ describe('files.create', () => {
       ),
     ).toBe(true);
     expect(
-      (await service.files.list({ eOfficeStatus: 'Linked' })).items.some(
+      (await service.files.list({ search: created.value.fileBarcode, eOfficeStatus: 'Linked' })).items.some(
         (file) => file.id === created.value.id,
       ),
     ).toBe(true);
     expect(
-      (await service.files.list({ eOfficeStatus: 'Not linked' })).items.some(
+      (await service.files.list({ search: created.value.fileBarcode, eOfficeStatus: 'Not linked' })).items.some(
         (file) => file.id === created.value.id,
       ),
     ).toBe(false);
