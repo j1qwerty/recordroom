@@ -114,6 +114,16 @@ describe('files.validateCreate', () => {
     expect(issues.some((issue) => issue.field === 'position')).toBe(true);
   });
 
+  it('refuses an e-office reference longer than 200 characters', async () => {
+    const shelf = await firstActiveShelf();
+    const issues = await service.files.validateCreate({
+      ...baseFile,
+      shelfId: shelf.id,
+      eOfficeReference: 'E'.repeat(201),
+    });
+    expect(issues.some((issue) => issue.field === 'eOfficeReference' && issue.severity === 'error')).toBe(true);
+  });
+
   it('accepts a clean row', async () => {
     const shelf = await firstActiveShelf();
     const issues = await service.files.validateCreate({ ...baseFile, shelfId: shelf.id });
