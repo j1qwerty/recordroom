@@ -1,8 +1,7 @@
 # Digitization document upload — PDF and images
 
-Status: **specification only, not built.** No PR opened yet.
-Author of requirement: project owner.
-Follow-up PR: to be opened by the project owner.
+Status: **Implementation is in progress on `feat/recordroom-pdf-image-uploads`**.
+The user's verbatim requirements below remain unchanged. The feature PR will be linked here after it is opened and CI has been checked.
 
 ---
 
@@ -142,3 +141,21 @@ endpoints.
   reinventing it.
 - Prerequisite PR #1 ("Improve RecordRoom registry, e-office linking, and operations UX") is
   merged, and added `RecordKind`, document size, and the e-office reference. Build on top of it.
+
+---
+
+## 3. Implementation decisions for the follow-up PR
+
+These details supplement the verbatim requirement above; they do not replace it.
+
+- **Formats:** PDF, JPG/JPEG, PNG and GIF. TIFF is not enabled in this iteration. The API checks the extension and file signature instead of trusting the browser's MIME type.
+- **Size:** default upload ceiling is 512 MiB to accommodate larger-format scans. Configure `FileStorage__MaxUploadBytes` to reduce this limit; the service caps the configured setting at 512 MiB. HTTP multipart limits include a small overhead beyond the content limit.
+- **Private persistent storage:** PDF/image bytes are stored under a configurable directory outside `wwwroot`. SQL Server stores the metadata, randomly generated storage key, version, checksum, size, uploader and timestamp. Configure `FileStorage__RootPath` to a persistent backed-up volume for production.
+- **Where uploads appear:** optional first scan on record creation, record-detail attachments, digitization-page rows, and map/copy rows. Each location provides view/preview and download where the browser supports it.
+- **Versioning:** subsequent uploads create new rows/versions and preserve prior bytes; they do not overwrite a previously uploaded scan. Legacy metadata rows stay readable, but cannot be previewed until real content has been uploaded.
+- **Page model:** one digitization page row points to one uploaded document version. Multipage PDFs are kept intact as a PDF; the service does not silently split PDF pages into separate digitization metadata rows.
+- **Local demo mode:** the in-memory adapter is only a UI/demo aid and holds file bytes in browser memory for the current session. It is not durable; use `VITE_API_MODE=http` with the .NET API for persistent storage.
+- **Deployment and backups:** mount the document directory as persistent storage. Back up the volume and SQL Server together, since the database metadata references content in that volume. Apply the EF migration before using uploads.
+- **Security gap to consider before production:** extension and signature checks are not a substitute for malware scanning. This iteration does not include an antivirus/quarantine pipeline, OCR, automatic PDF splitting, or cloud-object-storage integration.
+
+See [`docs/scanned-document-storage.md`](scanned-document-storage.md) for configuration and deployment notes.
