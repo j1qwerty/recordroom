@@ -184,7 +184,7 @@ export const digitizationService: DigitizationApi = {
       bulk: page.bulk,
     });
     if (!created.ok) return created;
-    const info = saveLocalRowDocument('page', created.value.id, file);
+    const info = await saveLocalRowDocument('page', created.value.id, file);
     const updated = { ...created.value, ...info, hasDocument: true };
     store.update((draft) => {
       const target = draft.batches.find((batch) => batch.id === owner.id);

@@ -72,14 +72,18 @@ export function FileDetailPage() {
     [fileId],
     EMPTY_MOVEMENTS,
   );
-  const { data: batches, reload: reloadBatches } = useQuery(() => service.digitization.batches(), [], EMPTY_BATCHES);
+  const { data: batches, reload: reloadBatches } = useQuery(
+    () => service.digitization.batches(),
+    [],
+    EMPTY_BATCHES,
+  );
   const { data: maps, reload: reloadMaps } = useQuery(
     () => service.uploads.maps({ fileBarcode: file?.fileBarcode ?? '' }),
     [file?.fileBarcode],
     EMPTY_MAPS,
   );
   const { data: documents, reload: reloadDocuments } = useQuery(
-    () => fileId ? service.files.listDocuments(fileId) : Promise.resolve([]),
+    () => (fileId ? service.files.listDocuments(fileId) : Promise.resolve([])),
     [fileId],
     EMPTY_DOCUMENTS,
   );
@@ -265,7 +269,11 @@ export function FileDetailPage() {
             )}
             {allowed('files.edit') && (
               <div className="mt-4 space-y-3 border-t border-base pt-4">
-                <Field label="E-office file name / ID" htmlFor="eoffice-reference" hint="Optional. Clear the field to remove the link.">
+                <Field
+                  label="E-office file name / ID"
+                  htmlFor="eoffice-reference"
+                  hint="Optional. Clear the field to remove the link."
+                >
                   <TextInput
                     id="eoffice-reference"
                     value={eOfficeDraft ?? file.eOfficeReference ?? ''}
@@ -301,7 +309,8 @@ export function FileDetailPage() {
               </Badge>
             </div>
             <p className="muted mt-2 text-xs leading-5">
-              Attach a combined scan or supporting PDF/image to this record. Uploading again creates a new version; older uploads remain available.
+              Attach a combined scan or supporting PDF/image to this record. Uploading again creates
+              a new version; older uploads remain available.
             </p>
             {documents.length === 0 ? (
               <div className="mt-4 rounded-xl border border-dashed border-base p-4">
@@ -323,7 +332,8 @@ export function FileDetailPage() {
                       <div className="min-w-0">
                         <p className="break-all text-xs font-semibold">{document.filename}</p>
                         <p className="muted mt-1 text-[11px]">
-                          Version {document.version} · {new Date(document.uploadedAt).toLocaleString()} · {document.uploadedBy}
+                          Version {document.version} ·{' '}
+                          {new Date(document.uploadedAt).toLocaleString()} · {document.uploadedBy}
                         </p>
                       </div>
                       {index === 0 && <Badge tone="success">Latest</Badge>}
@@ -334,6 +344,7 @@ export function FileDetailPage() {
                       hasDocument
                       contentType={document.contentType}
                       sizeBytes={document.sizeBytes}
+                      pageCount={document.pageCount}
                       canUpload={index === 0 && allowed('files.edit')}
                       onUpload={(upload) => service.files.uploadDocument(file.id, upload)}
                       getBlob={() => service.files.documentBlob(file.id, document.id)}
@@ -353,7 +364,8 @@ export function FileDetailPage() {
           <Card>
             <p className="text-sm font-semibold">Digitization pages</p>
             <p className="muted mt-1 text-xs leading-5">
-              Each row represents one page/version in a digitization batch. Uploading a rescan creates a new version instead of overwriting the old content.
+              Each row represents one page/version in a digitization batch. Uploading a rescan
+              creates a new version instead of overwriting the old content.
             </p>
             {pages.length === 0 ? (
               <p className="muted mt-4 text-xs">No page records are linked to this barcode yet.</p>
@@ -377,7 +389,9 @@ export function FileDetailPage() {
                       contentType={page.contentType}
                       sizeBytes={page.sizeBytes}
                       canUpload={allowed('digitization.upload')}
-                      onUpload={(upload) => service.digitization.uploadPageDocument(page.id, upload)}
+                      onUpload={(upload) =>
+                        service.digitization.uploadPageDocument(page.id, upload)
+                      }
                       getBlob={() => service.digitization.pageBlob(page.id)}
                       onUploaded={() => reloadBatches()}
                     />
@@ -393,7 +407,8 @@ export function FileDetailPage() {
               <p className="text-sm font-semibold">Maps and copies</p>
             </div>
             <p className="muted mt-1 text-xs leading-5">
-              Actual map scans are stored as versioned files. Existing metadata-only map rows can be uploaded here as well.
+              Actual map scans are stored as versioned files. Existing metadata-only map rows can be
+              uploaded here as well.
             </p>
             {maps.length === 0 ? (
               <p className="muted mt-4 text-xs">No map/copy rows are registered for this file.</p>
@@ -404,7 +419,9 @@ export function FileDetailPage() {
                     <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="break-all text-xs font-semibold">{map.filename}</p>
-                        <p className="muted mt-1 text-[11px]">Page {map.pageNo} · v{map.version} · {map.sizeKb} KiB</p>
+                        <p className="muted mt-1 text-[11px]">
+                          Page {map.pageNo} · v{map.version} · {map.sizeKb} KiB
+                        </p>
                       </div>
                       <StatusBadge status={map.status} />
                     </div>

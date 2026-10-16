@@ -5,7 +5,14 @@ using RecordRoom.Api.Application;
 
 namespace RecordRoom.Api.Application.Services;
 
-public sealed record StoredDocument(string StorageKey, string OriginalFileName, string ContentType, long SizeBytes, string Sha256);
+public sealed record StoredDocument(
+    string StorageKey,
+    string OriginalFileName,
+    string ContentType,
+    long SizeBytes,
+    string Sha256,
+    /// <summary>Pages in the stored PDF, or null when it is an image or the count is unknown.</summary>
+    int? PageCount = null);
 public sealed record PrivateDocumentContent(string FileName, string ContentType, long SizeBytes, string Sha256, Stream Stream);
 
 public interface IPrivateDocumentStore
@@ -65,20 +72,37 @@ public sealed class PrivateDocumentStore : IPrivateDocumentStore
         long size = 0;
         try
         {
-            await using var input = upload.OpenReadStream();
-            await using var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920,
-                FileOptions.Asynchronous | FileOptions.SequentialScan);
-            while (true)
+            await using (var input = upload.OpenReadStream())
             {
-                var read = await input.ReadAsync(buffer.AsMemory(0, buffer.Length), ct);
-                if (read == 0) break;
-                size += read;
-                if (size > MaxUploadBytes) throw new DocumentTooLargeException();
-                hash.AppendData(buffer.AsSpan(0, read));
-                await output.WriteAsync(buffer.AsMemory(0, read), ct);
+                await using (var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write,
+                    FileShare.None, 81920, FileOptions.Asynchronous | FileOptions.SequentialScan))
+                {
+                    while (true)
+                    {
+                        var read = await input.ReadAsync(buffer.AsMemory(0, buffer.Length), ct);
+                        if (read == 0) break;
+                        size += read;
+                        if (size > MaxUploadBytes) throw new DocumentTooLargeException();
+                        hash.AppendData(buffer.AsSpan(0, read));
+                        await output.WriteAsync(buffer.AsMemory(0, read), ct);
+                    }
+                    await output.FlushAsync(ct);
+                }
             }
-            await output.FlushAsync(ct);
-            return Result<StoredDocument>.Ok(new StoredDocument(key, name, type, size, Convert.ToHexString(hash.GetHashAndReset())));
+
+            // The page tree can sit anywhere in the file, so it is read back from the
+            // completed write rather than from a truncated header. The write handle is
+            // closed first because Windows will not reopen the file while it is held.
+            int? pageCount = null;
+            if (type == "application/pdf")
+            {
+                await using var written = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+                    81920, FileOptions.Asynchronous | FileOptions.SequentialScan);
+                pageCount = await PdfPageCounter.TryCountAsync(written, ct);
+            }
+
+            return Result<StoredDocument>.Ok(new StoredDocument(
+                key, name, type, size, Convert.ToHexString(hash.GetHashAndReset()), pageCount));
         }
         catch (DocumentTooLargeException)
         {

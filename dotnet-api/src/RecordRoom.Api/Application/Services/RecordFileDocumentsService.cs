@@ -22,7 +22,7 @@ public sealed class RecordFileDocumentsService(
     ICurrentUserAccessor current, ILogger<RecordFileDocumentsService> logger) : IRecordFileDocumentsService
 {
     private static RecordFileDocumentDto ToDto(RecordFileDocument d, string barcode) =>
-        new(d.Id, d.RecordFileId, barcode, d.Version, d.OriginalFileName, d.ContentType, d.SizeBytes, d.Sha256, d.UploadedAt, d.UploadedBy);
+        new(d.Id, d.RecordFileId, barcode, d.Version, d.OriginalFileName, d.ContentType, d.SizeBytes, d.Sha256, d.UploadedAt, d.UploadedBy, d.PageCount);
 
     public async Task<RecordFileDocumentDto[]?> ListAsync(int fileId, CancellationToken ct = default)
     {
@@ -47,7 +47,8 @@ public sealed class RecordFileDocumentsService(
         {
             RecordFileId = fileId, Version = version, OriginalFileName = stored.OriginalFileName,
             StorageKey = stored.StorageKey, ContentType = stored.ContentType, SizeBytes = stored.SizeBytes,
-            Sha256 = stored.Sha256, UploadedAt = DateTime.UtcNow, UploadedBy = current.UserName
+            Sha256 = stored.Sha256, UploadedAt = DateTime.UtcNow, UploadedBy = current.UserName,
+            PageCount = stored.PageCount
         };
         db.FileDocuments.Add(row);
         await audit.LogAsync(db, AuditAction.Create, "RecordFileDocument", "pending", "-",

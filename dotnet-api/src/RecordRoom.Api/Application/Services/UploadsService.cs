@@ -24,7 +24,8 @@ public sealed class UploadsService(AppDbContext db, IAuditWriter audit, ICurrent
 {
     private static MapUploadDto ToDto(MapUpload m) => new(
         m.Id, m.Barcode, m.FileName, m.PageNo, m.Version, Display.Page(m.Status),
-        m.UploadedAt, m.UploadedBy, m.SizeKb, !string.IsNullOrWhiteSpace(m.StorageKey), m.ContentType, m.SizeBytes, m.Sha256);
+        m.UploadedAt, m.UploadedBy, m.SizeKb, !string.IsNullOrWhiteSpace(m.StorageKey), m.ContentType, m.SizeBytes, m.Sha256,
+        m.PageCount, m.PageIndex);
 
     public async Task<MapUploadDto[]> MapsAsync(string? fileBarcode, string? search, CancellationToken ct)
     {
@@ -106,7 +107,8 @@ public sealed class UploadsService(AppDbContext db, IAuditWriter audit, ICurrent
             Barcode = original.Barcode, FileName = stored.OriginalFileName, PageNo = original.PageNo, Version = version,
             Status = PageStatus.PendingReview, SizeKb = (int)Math.Ceiling(stored.SizeBytes / 1024d),
             UploadedAt = DateTime.UtcNow, UploadedBy = current.UserName,
-            StorageKey = stored.StorageKey, ContentType = stored.ContentType, SizeBytes = stored.SizeBytes, Sha256 = stored.Sha256
+            StorageKey = stored.StorageKey, ContentType = stored.ContentType, SizeBytes = stored.SizeBytes, Sha256 = stored.Sha256,
+            PageCount = stored.PageCount
         };
         db.Maps.Add(map);
         if (version > 1)

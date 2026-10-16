@@ -30,7 +30,8 @@ public sealed class DigitizationService(
     private static DigitizationPageDto ToPage(DigitizationPage p) => new(
         p.Id, p.BatchId, p.Barcode, p.FileName, p.PageNo, p.Version,
         Display.Page(p.Status), p.Note, p.UploadedAt, p.UploadedBy, p.Bulk,
-        !string.IsNullOrWhiteSpace(p.StorageKey), p.ContentType, p.SizeBytes, p.Sha256);
+        !string.IsNullOrWhiteSpace(p.StorageKey), p.ContentType, p.SizeBytes, p.Sha256,
+        p.PageCount, p.PageIndex);
 
     private static DigitizationBatchDto ToBatch(DigitizationBatch b) => new(
         b.Id, b.Code, b.EmployeeCode, b.EmployeeName, b.Department,
@@ -222,7 +223,8 @@ public sealed class DigitizationService(
             Status = version > 1 && hasActive ? PageStatus.Duplicate : PageStatus.PendingReview,
             Note = $"Uploaded document version {version} for page {original.PageNo}.",
             UploadedAt = DateTime.UtcNow, UploadedBy = current.UserName, Bulk = original.Bulk,
-            StorageKey = stored.StorageKey, ContentType = stored.ContentType, SizeBytes = stored.SizeBytes, Sha256 = stored.Sha256
+            StorageKey = stored.StorageKey, ContentType = stored.ContentType, SizeBytes = stored.SizeBytes, Sha256 = stored.Sha256,
+            PageCount = stored.PageCount
         };
         db.Pages.Add(page);
         original.Batch.Pages.Add(page);

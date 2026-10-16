@@ -257,8 +257,12 @@ export function DigitizationBatchPage() {
                             hasDocument={page.hasDocument === true}
                             contentType={page.contentType}
                             sizeBytes={page.sizeBytes}
+                            pageCount={page.pageCount}
+                            pageIndex={page.pageIndex}
                             canUpload={allowed('digitization.upload') && !readOnly}
-                            onUpload={(file) => service.digitization.uploadPageDocument(page.id, file)}
+                            onUpload={(file) =>
+                              service.digitization.uploadPageDocument(page.id, file)
+                            }
                             getBlob={() => service.digitization.pageBlob(page.id)}
                             onUploaded={() => reload()}
                           />

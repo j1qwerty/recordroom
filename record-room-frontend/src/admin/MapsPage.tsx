@@ -8,7 +8,8 @@ import { Badge } from '../components/ui/Badge';
 import { Field, TextInput } from '../components/ui/Field';
 import { Flash, StatusBadge } from '../components/ui/Flash';
 import { EmptyState } from '../components/ui/EmptyState';
-import { useQuery, useService } from '../hooks/useService';
+import { DocumentUploadActions } from '../components/DocumentUploadActions';
+import { useQuery, useService, useSession } from '../hooks/useService';
 import type { MapUpload, RecordFile } from '../types';
 
 /**
@@ -21,6 +22,10 @@ import type { MapUpload, RecordFile } from '../types';
  */
 export function MapsPage() {
   const service = useService();
+  const session = useSession();
+  // MapsPage rows are digitization scans, so reuse that permission. It matches the
+  // API's Admin/Supervisor/Operator gate on `POST /api/uploads/maps/{id}/document`.
+  const canUpload = session.allowed('digitization.upload');
 
   const [search, setSearch] = useState('');
   const [adding, setAdding] = useState(false);
@@ -102,7 +107,7 @@ export function MapsPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[880px] text-left text-sm">
+            <table className="w-full min-w-[1120px] text-left text-sm">
               <thead className="bg-[var(--rr-bg)] text-xs uppercase tracking-wider muted">
                 <tr>
                   <th className="px-5 py-3">File barcode</th>
@@ -112,6 +117,7 @@ export function MapsPage() {
                   <th className="px-5 py-3">Size</th>
                   <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3">Uploaded</th>
+                  <th className="px-5 py-3">Document</th>
                   <th className="px-5 py-3" />
                 </tr>
               </thead>
@@ -140,6 +146,23 @@ export function MapsPage() {
                     <td className="px-5 py-4 text-xs muted">
                       {row.uploadedAt}
                       <span className="block text-[11px]">{row.uploadedBy}</span>
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="min-w-[260px]">
+                        <DocumentUploadActions
+                          filename={row.filename}
+                          version={row.version}
+                          hasDocument={row.hasDocument === true}
+                          contentType={row.contentType}
+                          sizeBytes={row.sizeBytes}
+                          pageCount={row.pageCount}
+                          pageIndex={row.pageIndex}
+                          canUpload={canUpload}
+                          onUpload={(file) => service.uploads.uploadMapDocument(row.id, file)}
+                          getBlob={() => service.uploads.mapBlob(row.id)}
+                          onUploaded={() => reload()}
+                        />
+                      </div>
                     </td>
                     <td className="px-5 py-4 text-right">
                       <Button

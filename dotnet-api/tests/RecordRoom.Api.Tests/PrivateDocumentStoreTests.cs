@@ -29,11 +29,15 @@ public sealed class PrivateDocumentStoreTests
             Assert.Equal("application/pdf", saved.ContentType);
             Assert.Equal(Convert.ToHexString(SHA256.HashData(bytes)), saved.Sha256);
 
-            await using var opened = await store.OpenReadAsync(saved.StorageKey);
+            // Windows keeps a delete pending while a read handle is open, so close it first.
+            var opened = await store.OpenReadAsync(saved.StorageKey);
             Assert.NotNull(opened);
-            using var copy = new MemoryStream();
-            await opened!.CopyToAsync(copy);
-            Assert.Equal(bytes, copy.ToArray());
+            using (opened!)
+            {
+                using var copy = new MemoryStream();
+                await opened.CopyToAsync(copy);
+                Assert.Equal(bytes, copy.ToArray());
+            }
 
             await store.DeleteAsync(saved.StorageKey);
             Assert.Null(await store.OpenReadAsync(saved.StorageKey));

@@ -98,7 +98,7 @@ export const uploadsService: UploadsApi = {
       sizeKb: Math.max(1, Math.ceil(file.size / 1024)),
     });
     if (!created.ok) return created;
-    const info = saveLocalRowDocument('map', created.value.id, file);
+    const info = await saveLocalRowDocument('map', created.value.id, file);
     const updated = { ...created.value, ...info, hasDocument: true };
     store.update((draft) => {
       const index = draft.maps.findIndex((row) => row.id === created.value.id);
