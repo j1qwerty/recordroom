@@ -29,6 +29,7 @@ import { locationsService } from './impl/locations';
 import { movementsService } from './impl/movements';
 import { reportsService } from './impl/reports';
 import { uploadsService } from './impl/uploads';
+import { clearLocalDocumentStorage } from './impl/document-storage';
 import { usersService } from './impl/users';
 import { inquiriesService, mediaService } from './impl/inquiries';
 import {
@@ -72,6 +73,7 @@ const localService: RecordRoomService = {
   media: mediaService,
   async reset() {
     store.reset();
+    clearLocalDocumentStorage();
   },
 };
 
