@@ -406,6 +406,13 @@ export const httpFilesService: FilesApi = {
     return result.ok ? ok(toFile(result.value)) : result;
   },
 
+  async updateEOfficeReference(fileId, reference) {
+    const result = await attempt<Dto>('PUT', `/api/files/${fileId}/e-office-reference`, {
+      eOfficeReference: reference.trim() || null,
+    });
+    return result.ok ? ok(toFile(result.value)) : result;
+  },
+
   async remove(fileId) {
     return wrapTrue(await attempt<Dto>('DELETE', `/api/files/${fileId}`));
   },
