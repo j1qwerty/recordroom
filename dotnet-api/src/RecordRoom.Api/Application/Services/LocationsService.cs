@@ -15,6 +15,7 @@ public interface ILocationsService
 {
     Task<Result<RoomDto[]>> RoomsAsync(CancellationToken ct = default);
     Task<RoomDto?> RoomAsync(int id, CancellationToken ct = default);
+    Task<Result<RoomDto>> AddRoomAsync(RoomInput input, CancellationToken ct = default);
     Task<AreaDto[]> AreasAsync(CancellationToken ct = default);
     Task<Result<SectionDto>> AddSectionAsync(int roomId, SectionInput input, CancellationToken ct = default);
     Task<Result<SectionDto>> UpdateSectionAsync(int id, SectionInput input, CancellationToken ct = default);
@@ -99,6 +100,42 @@ public sealed class LocationsService(
     {
         var all = await LoadRoomsAsync(ct);
         return all.FirstOrDefault(r => r.Id == id);
+    }
+
+    public async Task<Result<RoomDto>> AddRoomAsync(RoomInput input, CancellationToken ct = default)
+    {
+        var code = input.Code?.Trim().ToUpperInvariant() ?? string.Empty;
+        var name = input.Name?.Trim() ?? string.Empty;
+        if (code.Length == 0) return Result<RoomDto>.Fail("Room code is required.", "code");
+        if (name.Length == 0) return Result<RoomDto>.Fail("Room name is required.", "name");
+        if (code.Length > 50) return Result<RoomDto>.Fail("Room code must be 50 characters or fewer.", "code");
+        if (name.Length > 200) return Result<RoomDto>.Fail("Room name must be 200 characters or fewer.", "name");
+        if (await db.Rooms.AnyAsync(r => r.Code.ToLower() == code.ToLower(), ct))
+            return Result<RoomDto>.Fail($"Room code {code} is already in use.", "code");
+
+        var room = new Room
+        {
+            Code = code,
+            Name = name,
+            Building = input.Building?.Trim() ?? string.Empty,
+            Floor = input.Floor?.Trim() ?? string.Empty,
+            Capacity = Math.Clamp(input.Capacity, 1, 1000000),
+            Occupancy = 0,
+            Status = RoomStatus.Operational,
+        };
+
+        db.Rooms.Add(room);
+        await db.SaveChangesAsync(ct);
+        await audit.LogAsync(db, AuditAction.Create, "Room", room.Id.ToString(),
+            "-", $"{room.Code} / {room.Name}", $"Room {room.Code} created");
+        await db.SaveChangesAsync(ct);
+        await audit.AnnounceAsync(RealtimeChannels.Locations, "room.created", room.Id.ToString(),
+            $"Room {room.Code} created");
+
+        var created = await RoomAsync(room.Id, ct);
+        return created is null
+            ? Result<RoomDto>.Fail("Room was saved but could not be reloaded.")
+            : Result<RoomDto>.Ok(created);
     }
 
     public async Task<AreaDto[]> AreasAsync(CancellationToken ct = default) =>
