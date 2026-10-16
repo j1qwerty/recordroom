@@ -96,8 +96,13 @@ public class FilesController(IFilesService files) : ControllerBase
     public async Task<IResult> Relocate(int id, RelocateInput input, CancellationToken ct) =>
         ApiResults.FromResult(await files.RelocateAsync(id, input, ct));
 
+    [Authorize(Roles = "Admin,Supervisor,Operator")]
+    [HttpPut("{id:int}/e-office-reference")]
+    public async Task<IResult> UpdateEOfficeReference(int id, EOfficeReferenceInput input, CancellationToken ct) =>
+        ApiResults.FromResult(await files.UpdateEOfficeReferenceAsync(id, input, ct));
+
     [Authorize(Roles = "Admin,Supervisor")]
-    [HttpDelete("{id:int}")]
+    [HttpDelete("{id:int}")
     public async Task<IResult> Delete(int id, CancellationToken ct) =>
         ApiResults.FromResult(await files.DeleteAsync(id, ct));
 }
