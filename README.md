@@ -252,3 +252,9 @@ only — a bare IP cannot get a normal TLS certificate):
 2. ~~Scaffold `dotnet-api/`~~ Done — .NET 10 + SQL Server, deployed live (see above).
    Remaining: harden for scale (persisted Hangfire storage, Redis cache, HTTPS
    via a domain).
+3. **Feature inventory and roadmap:** `docs/Recordroom-features.md` — what v1
+   ships today, the known defects, the in-app PDF reader and UI enhancements
+   planned for v1, and everything queued for v2: the scan composition gallery
+   (drag-reorder, page replace, per-page enhancement), OCR and full-text search,
+   DPI and PDF/A compliance, handover sign-off, plus the verified library
+   shortlist and licence risks behind each.
