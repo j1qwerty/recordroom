@@ -35,11 +35,12 @@ against `dotnet-api/` touches that folder and nothing else.
 
 ## What is included
 
-- Sign-in as one of the four legacy roles, with a user name and password. The
-  mobile OTP, employee PIN and password-recovery entry points are no longer
-  reachable from this screen; the API still exposes and tests them
-  (`/api/auth/otp`, `/api/auth/pin`, `/api/auth/recover`), so restoring them is
-  a UI-only change. Every attempt is still written to the login history.
+- Sign-in as one of the four legacy roles, with a user name and either a
+  password or a 4-digit PIN. The PIN path (`match_pin`) is kept so an employee
+  who has no password is never locked out; it is reached from the same screen
+  via a toggle, not a separate mode. Mobile OTP and password recovery remain
+  implemented and API-tested but are not reachable from this screen. Every
+  attempt, including failures, is written to the login history.
 - Role-aware shell: four legacy roles (Admin, Supervisor, Operator, Employee)
   with a visible permission matrix and route guards.
 - File registry with real filtering, sorting, paging and CSV export, kept

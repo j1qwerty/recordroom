@@ -104,14 +104,81 @@ async function parse(response: Response): Promise<Envelope<unknown>> {
   const text = await response.text();
   if (text.length === 0) return { success: response.ok, data: null, errors: null };
 
+  let payload: unknown;
   try {
-    return JSON.parse(text) as Envelope<unknown>;
+    payload = JSON.parse(text);
   } catch {
     throw new ApiError(
       response.status,
       `The API returned a non-JSON response (${response.status}).`,
     );
   }
+
+  return normalise(payload, response.ok);
+}
+
+/**
+ * Coerces a response body into the one envelope shape the callers understand.
+ *
+ * The API is configured to answer a model-binding failure with the same
+ * `ApiResponse` envelope as a service refusal, so this is belt and braces for
+ * anything that still slips through - a framework-level 400, an antiforgery or
+ * auth middleware response, or a body served by something that is not this API.
+ *
+ * Without it the fall-through is silent: `errors[0].message` is read to attach
+ * a message to a specific input, and a body with a different shape yields no
+ * field error at all, so the user sees only "Request failed (400)".
+ */
+function normalise(payload: unknown, ok: boolean): Envelope<unknown> {
+  if (payload !== null && typeof payload === 'object') {
+    const body = payload as Record<string, unknown>;
+
+    // Already the app envelope.
+    if (typeof body.success === 'boolean') {
+      return {
+        success: body.success,
+        data: (body.data ?? null) as unknown,
+        errors: (body.errors as FieldError[] | null) ?? null,
+      };
+    }
+
+    // RFC 7807 / RFC 9110 problem details: { title, errors: { Field: [msg] } }.
+    // `errors` may also be an array of { message } without a field.
+    const raw = body.errors;
+    const collected: FieldError[] = [];
+
+    if (Array.isArray(raw)) {
+      for (const entry of raw) {
+        if (entry && typeof entry === 'object') {
+          const e = entry as Record<string, unknown>;
+          const message =
+            typeof e.message === 'string'
+              ? e.message
+              : typeof e.title === 'string'
+                ? e.title
+                : null;
+          if (message) {
+            collected.push({ message, field: typeof e.field === 'string' ? e.field : null });
+          }
+        }
+      }
+    } else if (raw !== null && typeof raw === 'object') {
+      for (const [field, value] of Object.entries(raw as Record<string, unknown>)) {
+        const messages = Array.isArray(value) ? value : [value];
+        for (const message of messages) {
+          if (typeof message === 'string') collected.push({ message, field });
+        }
+      }
+    }
+
+    if (collected.length > 0) return { success: false, data: null, errors: collected };
+
+    if (typeof body.title === 'string') {
+      return { success: false, data: null, errors: [{ message: body.title, field: null }] };
+    }
+  }
+
+  return { success: ok, data: ok ? payload : null, errors: null };
 }
 
 async function raw(path: string, method: string, body?: unknown): Promise<Response> {
@@ -226,9 +293,11 @@ export async function attemptForm<T>(path: string, body: FormData): Promise<Resu
   try {
     response = await fetch(`${BASE}${path}`, { method: 'POST', headers: authHeader(), body });
   } catch (cause) {
-    return err<T>(`Cannot reach the record-room API at ${BASE}. Is it running? (${
-      cause instanceof Error ? cause.message : String(cause)
-    })`);
+    return err<T>(
+      `Cannot reach the record-room API at ${BASE}. Is it running? (${
+        cause instanceof Error ? cause.message : String(cause)
+      })`,
+    );
   }
   if (response.status === 401) {
     handleUnauthorized();
@@ -253,22 +322,30 @@ export async function getBlob(path: string): Promise<Blob> {
   try {
     response = await fetch(`${BASE}${path}`, { headers: authHeader() });
   } catch (cause) {
-    throw new ApiError(0, `Cannot reach the record-room API at ${BASE}. Is it running? (${
-      cause instanceof Error ? cause.message : String(cause)
-    })`);
+    throw new ApiError(
+      0,
+      `Cannot reach the record-room API at ${BASE}. Is it running? (${
+        cause instanceof Error ? cause.message : String(cause)
+      })`,
+    );
   }
   if (response.status === 401) {
     handleUnauthorized();
     throw new ApiError(401, 'Your session has expired. Sign in again.');
   }
   if (!response.ok) {
-    let message = response.status === 403
-      ? 'Your role does not permit that action.'
-      : `Document request failed (${response.status}).`;
+    let message =
+      response.status === 403
+        ? 'Your role does not permit that action.'
+        : `Document request failed (${response.status}).`;
     try {
       const text = await response.text();
       if (text) {
-        const data = JSON.parse(text) as { errors?: Array<{ message?: string }>; detail?: string; title?: string };
+        const data = JSON.parse(text) as {
+          errors?: Array<{ message?: string }>;
+          detail?: string;
+          title?: string;
+        };
         message = data.errors?.[0]?.message ?? data.detail ?? data.title ?? message;
       }
     } catch {

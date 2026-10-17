@@ -83,7 +83,16 @@ function Invoke-Api {
             $text = $reader.ReadToEnd()
         } catch { }
         if ($Raw) { return [pscustomobject]@{ Status = $status; Body = $text } }
-        return [pscustomobject]@{ Status = $status; Body = $text }
+
+        # Parse the refusal body too. This used to return without a Data
+        # property, so `.Data.success` and `.Data.errors[0].field` were silently
+        # $null on every 4xx - which made an assertion like
+        # `@($r.Data.errors).Count -gt 0` pass vacuously, because @($null)
+        # has a Count of 1. Error-body assertions had to fall back to matching
+        # the raw Body string, which cannot check a field name structurally.
+        $errorData = $null
+        if ($text.Length -gt 0) { try { $errorData = $text | ConvertFrom-Json } catch { $errorData = $text } }
+        return [pscustomobject]@{ Status = $status; Body = $text; Data = $errorData }
     }
 
     if ($Raw) { return [pscustomobject]@{ Status = 200; Body = $text } }
@@ -184,6 +193,26 @@ if (-not $SkipDestructive) {
     $dupShelf = Invoke-Api -Method POST -Path "/api/locations/almirahs/$($almirah1.id)/shelves" -Token $admin `
         -Body @{ code = 'DUPE-S-01'; name = 'Duplicate'; barcode = $almirah1.shelves[0].barcode; capacity = 80 }
     Assert-Equal 400 $dupShelf.Status 'a duplicate shelf barcode is refused'
+
+    # Room creation has no DELETE counterpart, so these two exercise only the
+    # refusal paths. They leave no row behind, which keeps the suite
+    # re-runnable against the same database.
+    $dupRoom = Invoke-Api -Method POST -Path '/api/locations/rooms' -Token $admin `
+        -Body @{ code = $room1.code; name = 'Duplicate room' }
+    Assert-Equal 400 $dupRoom.Status 'a duplicate room code is refused'
+    Assert-True ($dupRoom.Data.success -eq $false) 'a refusal uses the ApiResponse envelope, not success'
+    Assert-True (@($dupRoom.Data.errors).Count -gt 0) 'a refusal carries at least one field error'
+    Assert-Equal 'code' @($dupRoom.Data.errors)[0].field 'the refusal names the offending field'
+
+    # A property the model binder rejects used to short-circuit into MVC's own
+    # RFC 7807 ProblemDetails document, which the frontend cannot read, because
+    # it attaches a message to an input by reading errors[0].field. It must now
+    # come back in the same envelope as every other refusal.
+    $noName = Invoke-Api -Method POST -Path '/api/locations/rooms' -Token $admin `
+        -Body @{ code = "TEST-$([guid]::NewGuid().ToString('N').Substring(0,6))" }
+    Assert-Equal 400 $noName.Status 'a room with no name is refused'
+    Assert-True ($noName.Data.success -eq $false) 'a model-binding refusal uses the ApiResponse envelope too'
+    Assert-True ($null -ne @($noName.Data.errors)[0].field) 'a model-binding refusal names the offending field'
 }
 
 # ============================================================ files

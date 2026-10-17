@@ -17,9 +17,9 @@ deleted.
 
 ### Session
 
-- `/login` sign-in (user name + password, one of the four legacy roles). The
-  mobile OTP, employee PIN and password-recovery entry points were removed from
-  this screen; the API endpoints behind them remain.
+- `/login` sign-in (user name + password or 4-digit PIN, one of the four legacy
+  roles). Mobile OTP and password recovery remain implemented and API-tested but
+  are not reachable from this screen.
 
 ### Core
 

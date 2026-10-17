@@ -11,9 +11,11 @@ carries the behaviour and the screen that exposes it.
       Web password, mobile OTP, employee PIN and `forgotpassword → enterotp →
       recoverpassword` recovery, all reproduced from `User.php: login_process/
       check_logg/logout` and `Employee_reports: match_otp/match_pin`. The sign-in
-      screen was later simplified to a role picker plus user name and password, so
-      the OTP, PIN and recovery flows remain implemented and API-tested but are no
-      longer reachable from the UI; see PR #3. Every
+      screen was later simplified to a role picker plus user name and password
+      (PR #3), which briefly dropped the PIN path and would have locked out an
+      employee who has no password. A credential toggle has since restored it;
+      OTP and recovery remain implemented and API-tested but are not reachable
+      from the UI. Every
       attempt, including failures, is written to the login history and the audit
       trail. Roles are the legacy codes: Admin, Supervisor (1), Operator (2),
       Employee (3) — see `services/permissions.ts` and `layouts/RouteGuards.tsx`.

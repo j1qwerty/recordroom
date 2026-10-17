@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { Archive, ArrowRight, ShieldCheck, UserCircle } from '@phosphor-icons/react';
+import { Archive, ArrowRight, Key, ShieldCheck, UserCircle } from '@phosphor-icons/react';
 import { Button } from '../components/ui/Button';
 import { Field, TextInput } from '../components/ui/Field';
 import { Flash } from '../components/ui/Flash';
@@ -10,9 +10,26 @@ import { session } from '../services/impl/session';
 const ROLE_OPTIONS = [
   { userName: 'admin', role: 'Admin', description: 'Manage users, locations and system settings' },
   { userName: 'supervisor', role: 'Supervisor', description: 'Oversee records and digitization' },
-  { userName: 'operator', role: 'Operator', description: 'Register, issue, return and scan records' },
+  {
+    userName: 'operator',
+    role: 'Operator',
+    description: 'Register, issue, return and scan records',
+  },
   { userName: 'employee', role: 'Employee', description: 'View records and assigned information' },
 ] as const;
+
+/**
+ * Legacy `match_pin` accepted a 4-digit employee PIN, so an employee with no
+ * password was never locked out. PR #3 simplified this screen to a role picker
+ * and a password, which quietly removed that path. The endpoint
+ * (`POST /api/auth/pin` and `AuthApi.signInWithPin`) was never deleted, so this
+ * restores reachability rather than adding anything new.
+ *
+ * OTP and password recovery stay unreachable from this screen: they are
+ * multi-step flows that belong on their own surface, and neither is needed to
+ * keep a PIN-only employee working.
+ */
+const DEMO_PIN = '1234';
 
 export function LoginPage() {
   const service = useService();
@@ -22,6 +39,8 @@ export function LoginPage() {
   const [selectedRole, setSelectedRole] = useState<(typeof ROLE_OPTIONS)[number]['role']>('Admin');
   const [userName, setUserName] = useState('admin');
   const [password, setPassword] = useState(service.auth.demoPassword);
+  const [pin, setPin] = useState(DEMO_PIN);
+  const [usePin, setUsePin] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -31,6 +50,7 @@ export function LoginPage() {
     setSelectedRole(role.role);
     setUserName(role.userName);
     setPassword(service.auth.demoPassword);
+    setPin(DEMO_PIN);
     setError(null);
   };
 
@@ -39,7 +59,9 @@ export function LoginPage() {
     setPending(true);
     setError(null);
     try {
-      const result = await service.auth.signIn(userName.trim(), password);
+      const result = usePin
+        ? await service.auth.signInWithPin(userName.trim(), pin)
+        : await service.auth.signIn(userName.trim(), password);
       if (result.ok) navigate(from, { replace: true });
       else setError(result.error);
     } catch (cause) {
@@ -74,7 +96,9 @@ export function LoginPage() {
               >
                 <span className="flex items-center justify-between gap-2">
                   <span className="text-sm font-semibold">{role.role}</span>
-                  {selectedRole === role.role && <ShieldCheck size={18} className="text-accent" weight="fill" />}
+                  {selectedRole === role.role && (
+                    <ShieldCheck size={18} className="text-accent" weight="fill" />
+                  )}
                 </span>
                 <span className="muted mt-1.5 block text-xs leading-5">{role.description}</span>
               </button>
@@ -84,7 +108,11 @@ export function LoginPage() {
           <form onSubmit={submit} className="mt-6 space-y-4">
             <div>
               <h2 className="text-base font-semibold">Sign in</h2>
-              <p className="muted mt-1 text-sm">Use the account assigned to your role.</p>
+              <p className="muted mt-1 text-sm">
+                {usePin
+                  ? 'Enter the 4-digit PIN issued with your account.'
+                  : 'Use the account assigned to your role.'}
+              </p>
             </div>
             <Field label="Username" htmlFor="login-user" required>
               <div className="relative">
@@ -99,23 +127,54 @@ export function LoginPage() {
                 />
               </div>
             </Field>
-            <Field label="Password" htmlFor="login-password" required>
+            <Field
+              label={usePin ? 'PIN' : 'Password'}
+              htmlFor={usePin ? 'login-pin' : 'login-password'}
+              required
+            >
               <TextInput
-                id="login-password"
+                key={usePin ? 'pin' : 'password'}
+                id={usePin ? 'login-pin' : 'login-password'}
                 type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete="current-password"
+                value={usePin ? pin : password}
+                onChange={(event) =>
+                  usePin ? setPin(event.target.value) : setPassword(event.target.value)
+                }
+                // A PIN is not a password: keep it out of the browser's password
+                // manager, which would otherwise offer to save and refill it.
+                autoComplete={usePin ? 'off' : 'current-password'}
+                inputMode={usePin ? 'numeric' : undefined}
+                maxLength={usePin ? 4 : undefined}
+                pattern={usePin ? '[0-9]*' : undefined}
+                className={usePin ? 'font-mono tracking-[0.4em]' : undefined}
                 required
               />
             </Field>
             {error && <Flash tone="danger" text={error} onDismiss={() => setError(null)} />}
-            <Button type="submit" className="w-full" disabled={pending} icon={<ArrowRight size={17} />}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={pending}
+              icon={<ArrowRight size={17} />}
+            >
               {pending ? 'Signing in…' : 'Sign in'}
             </Button>
+            <button
+              type="button"
+              onClick={() => {
+                setUsePin(!usePin);
+                setError(null);
+              }}
+              className="focus-ring flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-semibold muted transition hover:text-[var(--rr-text)]"
+            >
+              <Key size={14} />
+              {usePin ? 'Use my password instead' : 'I have a 4-digit PIN instead'}
+            </button>
           </form>
         </section>
-        <p className="muted mt-5 text-center text-xs">Select one of the four available roles, then enter your credentials.</p>
+        <p className="muted mt-5 text-center text-xs">
+          Select one of the four available roles, then enter your credentials.
+        </p>
       </div>
     </main>
   );

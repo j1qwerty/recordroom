@@ -188,6 +188,46 @@ builder.Services.AddControllers()
 
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(
     new System.Text.Json.Serialization.JsonStringEnumConverter()));
+
+// Without this, a missing or null body property is rejected by MVC before the
+// action runs, and MVC answers with its own RFC 7807 ProblemDetails document
+// rather than the ApiResponse envelope every other refusal uses. The frontend
+// adapter reads `errors[0].message` and `errors[0].field` to attach a message to
+// the offending input, so a ProblemDetails body silently degraded to a generic
+// "Request failed (400)". It also made the service's own guard unreachable: a
+// service that checks `input.Code is null` could never see null, because model
+// validation had already returned.
+//
+// Rewriting the factory keeps the wire format single-shaped for every endpoint,
+// including ones added later. The field name is lower-cased to match the
+// frontend's input ids, which are camelCase.
+builder.Services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(o =>
+{
+    o.InvalidModelStateResponseFactory = context =>
+    {
+        var errors = context.ModelState
+            .Where(entry => entry.Value is { Errors.Count: > 0 })
+            .SelectMany(entry => entry.Value!.Errors.Select(error => new FieldError(
+                string.IsNullOrWhiteSpace(error.ErrorMessage)
+                    ? "That value is not valid."
+                    : error.ErrorMessage,
+                ToCamelCase(entry.Key))))
+            .ToArray();
+
+        // The factory is typed to IActionResult, so this wraps the envelope in
+        // an ObjectResult rather than using the minimal-API Results.BadRequest.
+        return new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(
+            ApiResponse<object>.Fail(errors.Length == 0
+                ? [new FieldError("The request body is not valid.")]
+                : errors));
+    };
+});
+
+// "roomCode" -> "roomCode"; "RoomCode" -> "roomCode".
+static string ToCamelCase(string name) => string.IsNullOrEmpty(name)
+    ? name
+    : char.ToLowerInvariant(name[0]) + name[1..];
+
 var signalR = builder.Services.AddSignalR();
 
 // Redis backplane for SignalR. Without it, realtime events raised on one API
