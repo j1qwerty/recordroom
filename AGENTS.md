@@ -30,7 +30,7 @@ If an admin panel for contact/inquiry-type data was not explicitly requested, **
 ## API setup (`dotnet-api/`)
 
 - Requires .NET 10 SDK and a reachable SQL Server. See `dotnet-api/README.md`.
-- `cd src/RecordRoom.Api && dotnet run --urls http://localhost:5199`
+- `cd dotnet-api && dotnet run --urls http://localhost:5199`, or from the repo root `.\run-api.ps1` (same thing, `--urls` pre-pinned) and `.\dev.ps1` to start API + web together.
 - Applies EF migrations and seeds the demo dataset if the registry is empty.
 - Tests: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-api.ps1` (142 assertions, no browser). Plus `dotnet test` for the pure-logic unit tests.
 
@@ -81,4 +81,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\test-api.ps1
 2. Change both implementations in the same commit.
 3. `tests/api-contract.test.ts` and `dotnet-api/scripts/test-api.ps1` should both still pass.
 
-Status strings cross the wire as words (`"Partially returned"`, `"Under Digitization"`), not enum names. `dotnet-api/src/RecordRoom.Api/Application/Display.cs` owns that mapping and must round-trip, since the UI filters by the same string it renders.
+Status strings cross the wire as words (`"Partially returned"`, `"Under Digitization"`), not enum names. `dotnet-api/Application/Display.cs` owns that mapping and must round-trip, since the UI filters by the same string it renders.

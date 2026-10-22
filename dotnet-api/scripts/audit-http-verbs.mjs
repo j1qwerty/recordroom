@@ -8,7 +8,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-const dir = process.argv[2] ?? 'src/RecordRoom.Api/Api/Controllers';
+const dir = process.argv[2] ?? 'Api/Controllers';
 const files = readdirSync(dir).filter((name) => name.endsWith('.cs'));
 
 const problems = [];

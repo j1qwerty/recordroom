@@ -21,7 +21,7 @@
     display-name mapping and CSV row classification.
   -->
   <ItemGroup>
-    <ProjectReference Include="..\..\src\RecordRoom.Api\RecordRoom.Api.csproj" />
+    <ProjectReference Include="..\..\RecordRoom.Api.csproj" />
   </ItemGroup>
 
   <ItemGroup>

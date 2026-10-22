@@ -122,7 +122,13 @@ and seeds the demo dataset, so there is no manual SQL step.
 ### 1. API — terminal 1
 
 ```powershell
-cd dotnet-api/src/RecordRoom.Api
+.\run-api.ps1                  # = dotnet run --project dotnet-api/RecordRoom.Api.csproj --urls …
+```
+
+The long form, without the helper:
+
+```powershell
+cd dotnet-api
 dotnet run --urls http://localhost:5199
 ```
 
@@ -131,6 +137,7 @@ dotnet run --urls http://localhost:5199
 
 `--urls` is required. There is no `launchSettings.json` in this project, so a bare
 `dotnet run` binds the default port 5000 instead and the frontend will not find it.
+`run-api.ps1` pins it, and `dev.ps1` starts the API *and* the web server together.
 
 ### 2. Frontend — terminal 2
 
@@ -165,7 +172,7 @@ API's default `Cors:AllowedOrigins` is already `http://localhost:5173`.
 ⚠️ **The demo password differs by mode, and this trips people up.** The in-memory
 adapter seeds `demo1234` (`record-room-frontend/src/services/impl/auth.ts:17`)
 while the API seeder uses `Demo@12345`
-(`dotnet-api/src/RecordRoom.Api/Infrastructure/Data/DatabaseSeeder.cs:14`). Neither
+(`dotnet-api/Infrastructure/Data/DatabaseSeeder.cs:14`). Neither
 is a mistake — they are two separate seed paths — but flipping `.env.local` to
 `http` will make the password you were just given stop working.
 

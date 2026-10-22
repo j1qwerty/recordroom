@@ -79,7 +79,7 @@ what lets `can()` stay type-safe. If a data-driven permission catalogue is
 genuinely wanted later, that is a separate decision.
 
 Migration: `dotnet ef migrations add AddRolePermission`, following the existing
-naming in `src/RecordRoom.Api/Migrations/`.
+naming in `dotnet-api/Migrations/`.
 
 Seed: insert the 4 current lists verbatim from `PermissionsForRole` so the
 migration is behaviour-preserving. The seed must be idempotent and must run

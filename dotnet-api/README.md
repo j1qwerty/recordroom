@@ -10,9 +10,20 @@ connection string targets `localhost` with Windows integrated security and
 creates the `RecordRoom` database on first run.
 
 ```bash
-cd src/RecordRoom.Api
+# from the repository root
+cd dotnet-api
 dotnet run --urls http://localhost:5199
 ```
+
+Or skip the `cd` entirely with the root helper (it pins `--urls` for you):
+
+```powershell
+.\run-api.ps1                  # http://localhost:5199
+.\run-api.ps1 -NoBuild         # skip the incremental build
+```
+
+`RecordRoom.Api.csproj` sits directly in `dotnet-api/`, so `dotnet run` from that
+folder needs no `--project`.
 
 On startup the API applies EF migrations and, if the registry is empty, seeds
 the demo dataset (3 rooms, 14 files, 3 batches, 4 receipts, 8 employees,

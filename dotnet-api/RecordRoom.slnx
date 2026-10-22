@@ -1,7 +1,5 @@
 <Solution>
-  <Folder Name="/src/">
-    <Project Path="src/RecordRoom.Api/RecordRoom.Api.csproj" />
-  </Folder>
+  <Project Path="RecordRoom.Api.csproj" />
   <Folder Name="/tests/">
     <Project Path="tests/RecordRoom.Api.Tests/RecordRoom.Api.Tests.csproj" />
   </Folder>

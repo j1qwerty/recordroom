@@ -68,7 +68,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $RepoRoot = $PSScriptRoot
-$ApiProject = Join-Path $RepoRoot 'dotnet-api/src/RecordRoom.Api/RecordRoom.Api.csproj'
+$ApiProject = Join-Path $RepoRoot 'dotnet-api/RecordRoom.Api.csproj'
 $WebDir = Join-Path $RepoRoot 'record-room-frontend'
 $PublicUrl = "http://${ServerIp}:${WebPort}/"
 $ApiHealthUrl = "http://${ServerIp}:${WebPort}/api/health"
