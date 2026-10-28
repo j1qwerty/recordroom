@@ -138,6 +138,8 @@ The digitisation engine and platform hardening. Full library tables live in
 1. Sargable registry query + index (may land early under v1 — §2.1 #1).
 2. SQL Server **full-text** index over existing metadata columns — no new
    infrastructure, stays transactionally consistent, no index-sync drift.
+   Once OCR lands, the same index covers extracted text, and the registry
+   search box becomes the frontend surface for it.
 3. Escalate to OpenSearch (Apache-2.0) **only** if OCR-era relevance demands it.
 4. Avoid: Elasticsearch (SSPL), `Lucene.Net` (stable release is 2012-era;
    4.8.0 still beta).
@@ -186,12 +188,17 @@ layer (searchable output), header/footer, page numbers, Linux support.
 Documented: rasterisation stays on `PDFsharp` 6.5.0 (7.0 is preview) /
 `Docnet.Core` 2.6.0.
 
-### 3.6 PDF/A compliance gate
+### 3.6 PDF/A compliance — generation *and* validation
 
-`VellumPdf.Conformance` **2.3.3** — in-process validation with rule id + ISO
-clause + severity; veraPDF as CI ground truth. Ghostscript must not produce
-archival PDF (known to emit veraPDF failures). `Codeuctivity.PdfAValidator` is
-AGPL — do not adopt.
+- **Generation:** QuestPDF emits PDF/A-2b/2u/2a/3b/3u/3a via
+  `DocumentSettings.PDFA_Conformance`; its own CI validates output with veraPDF.
+  **PDF/A-1 is not supported** (QuestPDF #1284) — the SoW says "PDF/A" without a
+  level, so confirm the contract wording; scanned-image documents normally
+  satisfy archival requirements at PDF/A-2b.
+- **Validation:** `VellumPdf.Conformance` **2.3.3** — in-process, rule id +
+  ISO clause + severity; veraPDF as CI ground truth.
+- Ghostscript must not produce archival PDF (known to emit veraPDF failures).
+  `Codeuctivity.PdfAValidator` is AGPL — do not adopt.
 
 ### 3.7 Editable permission matrix
 
@@ -200,13 +207,17 @@ policies replacing `[Authorize(Roles = ...)]` (today the API authorises on role
 name only and never enforces the matrix), Admin row locked against self-lockout
 server-side. **v1 stays read-only** — no editing until the user asks.
 
-### 3.8 Handover sign-off
+### 3.8 Custody chain — intake register and return sign-off
 
-New `DigitizationHandover` entity: vendor, batch, page count, received-by,
-signed-off-by, signed-off-at, remarks — written through the existing
-`IAuditWriter`. This is the only genuinely software-shaped item in tender
-phase 5; the unbinding/rebinding/return-to-department work around it is
-physical and stays out of software (§5 of `Recordroom-features.md`).
+The tender needs custody recorded **both ways** — phase 1 (receiving and
+counting the department's files) and phase 5 (return + digital handover
+sign-off); the previous plan only had the outbound half. One entity covers it:
+`DigitizationCustodyEvent` (direction in/out, batch, file count, reconciled
+count, department, vendor, by / signed-off-by / signed-off-at, remarks),
+written through the existing `IAuditWriter`. The intake side yields the
+count-reconciliation report the counting step implies. Unbinding, rebinding
+and dusting themselves are physical work and stay out of software
+(`Recordroom-features.md` §5).
 
 ### 3.9 Infrastructure hardening
 
@@ -230,8 +241,8 @@ The agreed order, with the gate that can stop it:
 | 5 | OCR POC on ~100 real records (§3.3) | **hard gate — pick an engine or stop** |
 | 6 | Scan gallery + reorder + replace; OCR tables; FTS over extracted text (§3.4, §3.3) | — |
 | 7 | PDF generation with invisible text layer (§3.5) | — |
-| 8 | PDF/A validation gate + veraPDF in CI (§3.6) | — |
-| 9 | Handover sign-off (§3.8) | small, independent |
+| 8 | PDF/A generation (2b) + validation gate + veraPDF in CI (§3.6) | — |
+| 9 | Custody chain — intake register + return sign-off (§3.8) | small, independent |
 | 10 | Permission matrix per the design doc (§3.7) | enforcement swap is its own reviewed commit |
 | 11 | OpenSearch only if step 6 disappoints (§3.1) | — |
 
@@ -243,6 +254,7 @@ The agreed order, with the gate that can stop it:
 |---|---|
 | Approve `.gitattributes` + renormalisation | v1 done (§2.1 #5) |
 | Supply ~100 real records for the OCR POC | the hard gate (§3.3) |
+| Confirm which PDF/A level the contract names (QuestPDF cannot emit PDF/A-1) | §3.5 / §3.6 |
 | Confirm QuestPDF licence eligibility (community licence has a revenue threshold) | §3.5 |
 | `scripts/barcode-gun.ahk` — priority, or later | v1 definition of done |
 | Confirm which SQL Server instance before touching the API (the ssh-tunnel prod-DB hazard is documented in the README) | every destructive API test run |

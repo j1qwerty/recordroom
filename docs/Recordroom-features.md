@@ -252,6 +252,7 @@ worthwhile on its own, before any OCR exists.
 |---|---|
 | **200–300 DPI** | Read DPI from image metadata at upload; reject below 200 with a **field-level** error (the envelope plumbing now exists). |
 | **PDF rasterisation** at fixed DPI | `PaddleOCR.Pdf` (PDFium) or `Docnet.Core` 2.6.0. Stay on **PDFsharp 6.5.0** — 7.0 is still preview. |
+| **PDF/A generation** | QuestPDF emits **PDF/A-2b/2u/2a/3b/3u/3a** via `DocumentSettings.PDFA_Conformance`, and QuestPDF's own CI validates its output with veraPDF. **PDF/A-1 is not supported** (QuestPDF issue #1284) — confirm which level the tender contract names before betting on it. Scanned-image documents normally satisfy archival requirements at **PDF/A-2b**. |
 | **PDF/A validation** | `VellumPdf.Conformance` **2.3.3** — `net10.0`, in-process, no Docker, AOT-ready, machine-readable rule id + ISO clause + severity, ~99% veraPDF parity |
 | **veraPDF as CI ground truth** | Industry standard (GPLv3/MPLv2), Java. Use in CI, not at runtime — there is no .NET port |
 | Ghostscript | ⚠️ Known to emit PDF/A that **fails** veraPDF (Archivematica #1220). Fine for rasterising; do not use it to produce archival PDF. |
@@ -263,7 +264,7 @@ worthwhile on its own, before any OCR exists.
 | Feature | Notes |
 |---|---|
 | Editable permission matrix | Full design — `role_permission` table, permission policies replacing `[Authorize(Roles)]`, Admin row locked — in `V2-EDITABLE-PERMISSIONS.md` |
-| **Digitisation handover sign-off** | New entity: vendor, batch, page count, received-by, signed-off-by, signed-off-at, remarks. No library needed; write through the existing `IAuditWriter`. This is the only genuinely software-shaped item from tender phase 5. |
+| **Custody chain — intake and return** | The tender needs custody recorded **both ways**: phase 1 (receiving + counting the department's files) *and* phase 5 (return + digital handover sign-off). One entity: `DigitizationCustodyEvent` (direction: in/out, batch, file count, reconciled count, department, vendor, by / signed-off-by / signed-off-at, remarks). No library needed; write through the existing `IAuditWriter`. The intake side also gives a count-reconciliation report ("received 4,120 · scanned 4,118"). |
 | Department / record-level scoping | `PRD.md` §16.2 and §18 describe a fuller pipeline (`RolePermission`, `UserRole`, `UserDelegation`). Larger than the matrix editor; not covered by it. |
 
 ## 2.5 Infrastructure 🔮
@@ -316,8 +317,8 @@ PDF/A producer, `PaddleOCRSharp` on Linux.
 | 6 | **OCR POC on 100 real records** | ← **hard gate.** Pick an engine or stop |
 | 7 | Scan gallery + reorder + replace; OCR tables; FTS over extracted text | |
 | 8 | Generate PDF from images + invisible OCR text layer | QuestPDF |
-| 9 | PDF/A validation gate at upload; veraPDF in CI | VellumPdf.Conformance |
-| 10 | Handover sign-off entity and screen | Small, independent |
+| 9 | PDF/A generation at PDF/A-2b from the composition pipeline + validation gate; veraPDF in CI | VellumPdf.Conformance; QuestPDF `PDFA_Conformance` |
+| 10 | Custody chain — intake register + return sign-off entity | Small, independent |
 | 11 | Permission matrix per `V2-EDITABLE-PERMISSIONS.md` | Enforcement swap is its own reviewed commit |
 | 12 | OpenSearch / vector search **only if** step 7 disappoints | |
 
@@ -330,7 +331,7 @@ software for them.
 
 | SoW item | Reality |
 |---|---|
-| Receiving, counting, secure handover of physical files | A receiving register could record it; the work itself is manual. |
+| Receiving, counting, secure handover of physical files | The physical work is manual, but custody is now recorded — see §2.4's `DigitizationCustodyEvent` (intake direction). |
 | Unbinding, removing staples/pins, flattening creases, dusting | Physical. |
 | Rebinding documents in original order | Physical. |
 | Returning files to the department | Physical; the **digital sign-off** in §2.4 is the software part. |
